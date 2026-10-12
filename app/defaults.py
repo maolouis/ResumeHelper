@@ -39,6 +39,8 @@ BASIC_FIELDS = [
     ("available_date", "可到岗日期"),
     ("preferred_city", "期望工作地点"),
     ("preferred_position", "期望岗位"),
+    ("linkedin", "LinkedIn"),
+    ("website", "个人网站"),
 ]
 
 
@@ -457,8 +459,10 @@ def initial_mappings_document() -> dict:
         "basic.work_years": ["工作年限", "工作经验年限", "从业年限"],
         "basic.employment_status": ["当前状态", "求职状态", "在职状态"],
         "basic.available_date": ["可到岗日期", "到岗时间", "最快到岗时间"],
-        "basic.preferred_city": ["期望工作地点", "意向城市", "工作地点", "期望城市"],
+        "basic.preferred_city": ["期望工作地点", "意向城市", "工作地点", "期望城市", "国家", "所在国家", "Country"],
         "basic.preferred_position": ["期望岗位", "意向职位", "求职意向", "应聘职位", "应聘岗位"],
+        "basic.linkedin": ["LinkedIn", "领英", "LinkedIn Profile", "领英主页"],
+        "basic.website": ["个人网站", "个人主页", "Portfolio", "作品链接", "Website", "个人链接"],
         "skills": ["专业技能", "技能特长", "技能", "计算机技能", "IT技能"],
         "personal_advantages": ["个人优势", "核心优势", "个人能力", "个人亮点"],
         "self_evaluation": ["自我评价", "个人评价", "自我介绍", "自我描述"],

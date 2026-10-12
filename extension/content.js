@@ -546,7 +546,10 @@
     [/^(?:家乡|籍贯|生源地|nativeplace|hometown)$/i, "basic.native_place"],
     [/^(?:证件类型|idtype)$/i, "basic.id_type"],
     [/^(?:证件号码|身份证号|身份证号码|idnumber)$/i, "basic.id_number"],
-    [/^(?:期望工作地点|期望城市|意向城市|preferredcity)$/i, "basic.preferred_city"]
+    [/^(?:期望工作地点|期望城市|意向城市|preferredcity)$/i, "basic.preferred_city"],
+    [/^(?:country|国家|地区|所在国家)$/i, "basic.nationality_country"],
+    [/^(?:linkedin|linkedIn profile|领英)$/i, "basic.linkedin"],
+    [/^(?:website|个人网站|个人主页|portfolio|作品链接|个人链接)$/i, "basic.website"]
   ];
 
   function descriptorLabels(descriptor) {
