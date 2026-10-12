@@ -35,14 +35,14 @@
     ["family_members", /家庭成员|家属信息|亲属信息/],
     ["references", /证明人|推荐人|背调联系人/],
     ["job_intentions", /求职意向|应聘意向|职业意向/],
-    ["education", /教育|学历|学习经历|education/i],
-    ["work_experience", /工作|实习|任职/],
-    ["projects", /项目/],
-    ["campus_experience", /在校实践|校内实践|校园实践|校园|社团|学生工作/],
+    ["education", /教育经历|教育背景|学历信息|学习经历|education/i],
+    ["work_experience", /工作经历|实习经历|工作\/实习|任职经历|实习/],
+    ["projects", /项目经历|项目经验|项目/],
+    ["campus_experience", /在校实践|校内实践|校园实践|校园经历|社团|学生工作/],
     ["volunteer_experience", /志愿|社会实践|公益活动/],
-    ["certificates_awards", /证书|奖项|荣誉|获奖/],
-    ["language_skills", /语言能力|外语能力|英语能力/],
-    ["professional_skills", /专业技能|技能清单|IT技能/],
+    ["certificates_awards", /证书|奖项|荣誉|获奖|奖励/],
+    ["language_skills", /语言能力|外语能力|英语能力|语言水平/],
+    ["professional_skills", /专业技能|技能清单|IT技能|技能特长/],
     ["trainings", /培训经历|培训信息/],
     ["publications", /论文|著作|发表成果/],
     ["patents", /专利|软著|软件著作权/]
@@ -185,7 +185,9 @@
     if (widgetLabel) pieces.push(widgetLabel.innerText || widgetLabel.textContent);
     const container = getContainer(control);
     if (container) {
-      const labels = container.querySelectorAll("label, [class*='label'], [class*='title'], .required, [data-label]");
+      const labels = container.querySelectorAll(
+        "label, [class*='label'], [class*='title'], [class*='field-name'], [class*='item-name'], [class*='control-name'], [class*='form-label'], [class*='label-text'], [class*='title-text'], .required, [data-label]"
+      );
       for (const label of labels) {
         if (label !== control && label.querySelector?.("input, select, textarea, [role='combobox'], [role='radio']")) continue;
         const text = cleanText(label.innerText || label.textContent);
@@ -197,9 +199,22 @@
     if (!pieces.some((piece) => cleanText(piece))) {
       let parent = control.parentElement;
       for (let depth = 0; parent && depth < 3; depth += 1, parent = parent.parentElement) {
-        const label = parent.querySelector(":scope > label, :scope > [class*='label'], :scope > [class*='title']");
+        const label = parent.querySelector(
+          ":scope > label, :scope > [class*='label'], :scope > [class*='title'], :scope > [class*='field-name'], :scope > [class*='item-name'], :scope > [class*='form-label']"
+        );
         const text = cleanText(label?.innerText || label?.textContent);
         if (text && text.length <= 80) { pieces.push(text); break; }
+      }
+    }
+    // 从控件的前一个兄弟元素提取 label（很多自研表单用兄弟 div 做标签）
+    if (!pieces.some((piece) => cleanText(piece))) {
+      let sibling = control;
+      for (let depth = 0; depth < 3 && sibling; depth += 1, sibling = sibling.parentElement) {
+        const prev = sibling.previousElementSibling;
+        if (prev && isVisible(prev)) {
+          const text = cleanText(prev.innerText || prev.textContent);
+          if (text && text.length <= 40) { pieces.push(text); break; }
+        }
       }
     }
     const metadataNodes = [control, control.querySelector?.("input:not([type='hidden']), textarea, select")].filter(Boolean);
@@ -521,10 +536,17 @@
 
   const MIN_CLASSIFIER_CONFIDENCE = 0.7;
   const STRONG_FIELD_RULES = [
-    [/^(?:毕业学校|毕业院校|最高学历学校|最高毕业院校|graduationschool|institution|university)$/i, "education[].school"],
-    [/^(?:最高学历|最高教育程度|最高学历层次|highestdegree|educationlevel|academicdegree)$/i, "education[].degree"],
-    [/^(?:毕业时间|毕业日期|毕业年月|最高学历毕业时间|graduationdate|graduationtime|educationenddate)$/i, "education[].end_date"],
-    [/^(?:性别|gender|sex)$/i, "basic.gender"]
+    [/^(?:毕业学校|毕业院校|学校名称|最高学历学校|最高毕业院校|graduationschool|institution|university)$/i, "education[].school"],
+    [/^(?:最高学历|学历|学历层次|最高教育程度|highestdegree|educationlevel|academicdegree)$/i, "education[].degree"],
+    [/^(?:专业|所学专业|专业名称|major|fieldofstudy)$/i, "education[].major"],
+    [/^(?:学历类型|学习形式|培养方式|学制)$/i, "education[].study_type"],
+    [/^(?:毕业时间|毕业日期|毕业年月|起止时间|最高学历毕业时间|graduationdate|graduationtime|educationenddate)$/i, "education[].end_date"],
+    [/^(?:性别|gender|sex)$/i, "basic.gender"],
+    [/^(?:国籍|nationality|countryofcitizenship)$/i, "basic.nationality_country"],
+    [/^(?:家乡|籍贯|生源地|nativeplace|hometown)$/i, "basic.native_place"],
+    [/^(?:证件类型|idtype)$/i, "basic.id_type"],
+    [/^(?:证件号码|身份证号|身份证号码|idnumber)$/i, "basic.id_number"],
+    [/^(?:期望工作地点|期望城市|意向城市|preferredcity)$/i, "basic.preferred_city"]
   ];
 
   function descriptorLabels(descriptor) {
@@ -832,6 +854,8 @@
     const control = descriptor.control;
     const text = String(desired ?? "").trim();
     if (!text) return { status: "missing" };
+    // 不自动填写"无"/"无此情况"等占位值，避免误覆盖页面默认选项
+    if (/^(无|没有|暂无|无此情况|none|n\/a|na)$/i.test(text)) return { status: "skipped" };
     const isRadio = descriptor.type === "radio" || descriptor.type === "radiogroup";
     if (!overwrite && descriptor.value && !(isRadio && hasOnlyDefaultRadioValue(control))) return { status: "skipped" };
     control.scrollIntoView({ block: "center", behavior: "auto" });
