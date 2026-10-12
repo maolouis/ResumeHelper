@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "简历快填 - 本地版",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "从本机简历档案填写招聘网站表单，数据不上传到第三方服务。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuVnu/qAYiLf2ROrFVZCzn8Tiycf5HdF0hVKw/9XUUIzZ2zeocQx+gEq55tjpn+Dajx/sr3KDeBywihMucPdtq6fBKZbCjd1X6L3GDcfPZ8tYh02EdaDKcF9aMGGZ0g+CSfDU5XBBAAh2GpbWaspMyfdMU/8qkAwva0FM03LAUYgrNyEQEOO6aqVGZeTWU/cLM6c9MO9XKVaUo2XsnW4zi3mLhuiMv4cC7rpmNq0EKKRuE3cHGZ2Rwvuy+G8kgkR9B760fQHWtA7kPNtQk3fbIHfwyYfJrQ5BIdFloOgH+UM+BayK81c5gEnWuVTrO/YCgaAbKfSUVwCTboxbxtGcfwIDAQAB",
   "permissions": [
