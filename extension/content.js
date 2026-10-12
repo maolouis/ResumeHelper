@@ -8,9 +8,9 @@
   }
   globalThis.__resumeHelperContentLoaded = CONTENT_VERSION;
 
-  const SELECT_WRAPPERS = ".ui-select, .ant-select, .el-select, .el-cascader, .ivu-select, .arco-select, .semi-select, [role='combobox'], [aria-haspopup='listbox']";
-  const DATE_WRAPPERS = ".ant-picker, .el-date-editor, .ivu-date-picker, .arco-picker, .semi-datepicker, [class*='date-picker'], [class*='month-picker']";
-  const RADIO_GROUPS = ".radio-group, .ant-radio-group, .el-radio-group, .ivu-radio-group, [role='radiogroup']";
+  const SELECT_WRAPPERS = ".ui-select, .ant-select, .el-select, .el-cascader, .ivu-select, .arco-select, .semi-select, .atsx-select, [class*='atsx-select'], [role='combobox'], [aria-haspopup='listbox']";
+  const DATE_WRAPPERS = ".ant-picker, .el-date-editor, .ivu-date-picker, .arco-picker, .semi-datepicker, .atsx-picker, [class*='atsx-picker'], [class*='date-picker'], [class*='month-picker']";
+  const RADIO_GROUPS = ".radio-group, .ant-radio-group, .el-radio-group, .ivu-radio-group, .atsx-radio-group, [role='radiogroup']";
 
   const uploads = new Map();
   const ADD_PATTERNS = {
@@ -365,9 +365,9 @@
       .filter((element, index, items) => items.indexOf(element) === index)
       .filter((element) => {
         if (element.disabled || element.getAttribute("aria-disabled") === "true"
-          || element.matches(".ui-select-disabled, .ant-select-disabled, .ivu-select-disabled")
+          || element.matches(".ui-select-disabled, .ant-select-disabled, .ivu-select-disabled, .atsx-select-disabled")
           || element.querySelector("input:disabled")) return false;
-        if (element.closest(".ui-select-dropdown, .ant-select-dropdown, .el-select-dropdown, .ivu-select-dropdown")) return false;
+        if (element.closest(".ui-select-dropdown, .ant-select-dropdown, .el-select-dropdown, .ivu-select-dropdown, .atsx-select-dropdown, [class*='atsx-select-dropdown']")) return false;
         if (!element.readOnly) return true;
         return element.getAttribute("role") === "combobox"
           || /select|picker|dropdown/i.test(String(element.className || ""))
