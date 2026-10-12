@@ -1,14 +1,29 @@
 # 简历快填项目交接
 
-更新时间：2026-10-12
+更新时间：2026-10-12（v0.4.6）
 
 ## 当前状态
 
-当前源码版本为 `0.4.5`，桌面程序、Native Messaging Host、Edge 扩展和测试代码均位于本目录。项目不是 Git 仓库，没有可用的提交历史或分支信息。
+源码版本 `0.4.6`，已通过 git 推送到 `git@github.com:maolouis/ResumeHelper.git` main 分支。
+桌面程序、Native Messaging Host、Edge 扩展和测试代码均位于本目录。
 
-本轮修改已经在本机源码环境中验证通过。按需求没有重新构建安装程序，因此 `release\ResumeHelperSetup.exe` 和已有 `dist` 产物不能视为包含本轮全部网页识别改动。继续本机调试时应加载项目内的 `extension` 目录。
+程序不会自动提交招聘申请。所有真实网站验证只使用虚构数据填写页面 DOM，没有上传附件，也没有点击提交。
 
-程序不会自动提交招聘申请。真实网站验证只使用虚构数据填写页面 DOM，没有上传附件，也没有点击提交。
+## 本轮变更（v0.4.6）
+
+- 新增 `tests/test_chinese_recruitment_batch.js`：批量测试脚本，覆盖 47 个中文招聘网站/ATS。
+- 修复导航栏搜索框（如"搜索职位""AI 职位搜索"）被误识别为简历表单字段的问题。新增 `isNavigationSearch()` 过滤函数。
+- 修复长文本 textarea（如 "Please list any certifications..."）因栏目上下文误匹配为 `work_experience[].position` 的问题：对 label 长度 > 60 的长文本跳过 `combined.includes` 上下文加成。
+- 修正 4 个招聘官网 URL：米哈游 `campus.mihoyo.com`、蔚来 `campus.nio.com`、小鹏 `xiaopeng.jobs.feishu.cn`、理想 `lixiang.com/job/list.html`。
+- 修复 `scripts/build_installer.ps1` 编码问题（UTF-8 BOM）。
+- 重新构建 `release/ResumeHelperSetup.exe`（约 40MB）。
+
+## 批量测试结果（47 站）
+
+- 47/47 站点全部加载成功。
+- SHEIN/Greenhouse 职位页：23 个控件，11 个匹配，12 个字段填写成功并回读验证，0 失败。
+- 导航搜索框误匹配已消除（字节跳动、腾讯、B站、小红书、国家电网、BOSS直聘等站点的搜索框不再被识别为简历字段）。
+- 目标网站自身的 JS 错误（jQuery 未定义、_satellite 未定义等）与 content.js 无关，content.js 在所有站点无崩溃。
 
 ## 已完成功能
 
