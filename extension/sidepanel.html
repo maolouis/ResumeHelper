@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>简历快填</title>
+    <link rel="stylesheet" href="sidepanel.css">
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>简历快填</h1>
+        <p id="connectionText">正在连接本地资料...</p>
+      </div>
+      <span id="connectionDot" class="status-dot pending" title="本地连接状态"></span>
+    </header>
+
+    <main>
+      <section class="toolbar" aria-label="填写工具">
+        <label for="profileSelect">当前档案</label>
+        <select id="profileSelect"></select>
+        <div class="primary-actions">
+          <button id="scanButton" class="secondary" type="button">扫描页面</button>
+          <button id="fillButton" class="primary" type="button">一键填写</button>
+          <button id="importButton" class="secondary wide-action" type="button">读取页面资料到本地档案</button>
+        </div>
+        <label class="check-row">
+          <input id="overwriteToggle" type="checkbox">
+          <span>覆盖页面中已有内容</span>
+        </label>
+      </section>
+
+      <section id="pageSection" class="section" hidden>
+        <div class="section-heading">
+          <h2>当前页面</h2>
+          <span id="pageFieldCount" class="quiet"></span>
+        </div>
+        <p id="pageTitle" class="page-title"></p>
+        <div class="metrics" aria-label="填写结果">
+          <div><strong id="filledCount">0</strong><span>已填写</span></div>
+          <div><strong id="skippedCount">0</strong><span>已保留</span></div>
+          <div><strong id="missingCount">0</strong><span>待补充</span></div>
+          <div><strong id="failedCount">0</strong><span>失败</span></div>
+        </div>
+      </section>
+
+      <section id="detailsSection" class="section" hidden>
+        <div class="section-heading">
+          <h2 id="detailsTitle">本次操作明细</h2>
+          <span id="detailsCount" class="quiet"></span>
+        </div>
+        <div id="operationDetails" class="result-list"></div>
+      </section>
+
+      <section id="missingSection" class="section" hidden>
+        <div class="section-heading">
+          <h2>待补充信息</h2>
+          <button id="saveMissingButton" class="text-button" type="button">保存并重填</button>
+        </div>
+        <div id="missingFields" class="field-list"></div>
+      </section>
+
+      <section class="section">
+        <div class="section-heading">
+          <h2>简历与附件</h2>
+        </div>
+        <div class="upload-row">
+          <select id="documentSelect"></select>
+          <button id="uploadButton" class="secondary" type="button">填入附件</button>
+        </div>
+        <p class="quiet">文件从本机传给当前网页，上传请求仍由招聘网站执行。</p>
+      </section>
+
+      <section id="messageBox" class="message" hidden aria-live="polite"></section>
+    </main>
+
+    <footer>
+      <span>不会自动提交、登录或处理验证码</span>
+      <button id="refreshButton" class="text-button" type="button">刷新资料</button>
+    </footer>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>
+

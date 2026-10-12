@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+build/
+dist/
+*.spec
+*.log
+.idea/
+.vscode/
+node_modules/
+tests/reports/
+tmp/
+*.zip
+

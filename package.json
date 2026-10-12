@@ -1,0 +1,11 @@
+{
+  "name": "resume-helper-tests",
+  "private": true,
+  "scripts": {
+    "test": "node tests/test_matcher.js && node tests/test_content_dom.js && node tests/test_recruitment_variants.js",
+    "test:live": "node tests/test_live_recruitment_sites.js"
+  },
+  "devDependencies": {
+    "playwright": "1.64.0"
+  }
+}
