@@ -8,9 +8,12 @@
   }
   globalThis.__resumeHelperContentLoaded = CONTENT_VERSION;
 
-  const SELECT_WRAPPERS = ".ui-select, .ant-select, .el-select, .el-cascader, .ivu-select, .arco-select, .semi-select, .atsx-select, [class*='atsx-select'], [role='combobox'], [aria-haspopup='listbox']";
-  const DATE_WRAPPERS = ".ant-picker, .el-date-editor, .ivu-date-picker, .arco-picker, .semi-datepicker, .atsx-picker, [class*='atsx-picker'], [class*='date-picker'], [class*='month-picker']";
-  const RADIO_GROUPS = ".radio-group, .ant-radio-group, .el-radio-group, .ivu-radio-group, .atsx-radio-group, [role='radiogroup']";
+  // 通用组件识别：不枚举组件库名，用命名约定通配符匹配所有下拉/日期/单选组件
+  // 所有组件库的下拉容器 class 都以 `-select` 结尾（ant-select, el-select, atsx-select, arco-select, semi-select, ivu-select...）
+  // 排除内部子元素（selection/item/arrow/search/menu/dropdown 等）
+  const SELECT_WRAPPERS = "[class*='-select']:not([class*='-select-selection']):not([class*='-select-item']):not([class*='-select-arrow']):not([class*='-select-input']):not([class*='-select-search']):not([class*='-select-menu']):not([class*='-select-dropdown']):not([class*='-select-tags']):not([class*='-select-selection-item']), [role='combobox'], [aria-haspopup='listbox'], [aria-haspopup='menu']";
+  const DATE_WRAPPERS = "[class*='-picker']:not([class*='-picker-panel']):not([class*='-picker-dropdown']):not([class*='-picker-header']):not([class*='-picker-body']), [class*='date-editor'], [class*='calendar-picker']";
+  const RADIO_GROUPS = "[class*='-radio-group'], [class*='radio-group'], [role='radiogroup']";
 
   const uploads = new Map();
   const ADD_PATTERNS = {
@@ -357,17 +360,30 @@
 
   function controls() {
     const seen = new Set();
-    return deepQueryAll(`input, select, textarea, [contenteditable='true'], [role='radio'], ${SELECT_WRAPPERS}, ${DATE_WRAPPERS}, ${RADIO_GROUPS}`)
-      .map((element) => element.closest(RADIO_GROUPS)
-        || element.closest(SELECT_WRAPPERS)
-        || element.closest(DATE_WRAPPERS)
-        || element)
+    const all = deepQueryAll(`input, select, textarea, [contenteditable='true'], [role='radio'], ${SELECT_WRAPPERS}, ${DATE_WRAPPERS}, ${RADIO_GROUPS}`);
+    // 对于 select/date 容器，只保留最外层（不被其他容器包含的），避免内部子元素重复收集
+    const containerSet = new Set();
+    const rawContainers = all.filter((e) => e.matches(SELECT_WRAPPERS) || e.matches(DATE_WRAPPERS) || e.matches(RADIO_GROUPS));
+    for (const c of rawContainers) {
+      const outer = rawContainers.find((o) => o !== c && o.contains(c));
+      if (!outer) containerSet.add(c);
+    }
+    return all
+      .map((element) => {
+        if (element.matches(RADIO_GROUPS)) return element.closest(RADIO_GROUPS) || element;
+        // 如果元素本身或其祖先在最外层容器集合中，返回最外层容器
+        for (const c of containerSet) {
+          if (c === element || c.contains(element)) return c;
+        }
+        return element.closest(RADIO_GROUPS) || element.closest(SELECT_WRAPPERS) || element.closest(DATE_WRAPPERS) || element;
+      })
       .filter((element, index, items) => items.indexOf(element) === index)
       .filter((element) => {
         if (element.disabled || element.getAttribute("aria-disabled") === "true"
-          || element.matches(".ui-select-disabled, .ant-select-disabled, .ivu-select-disabled, .atsx-select-disabled")
+          || element.matches("[class*='-select-disabled'], [class*='-picker-disabled']")
           || element.querySelector("input:disabled")) return false;
-        if (element.closest(".ui-select-dropdown, .ant-select-dropdown, .el-select-dropdown, .ivu-select-dropdown, .atsx-select-dropdown, [class*='atsx-select-dropdown']")) return false;
+        // 排除下拉浮层/弹出层/选项面板（所有组件库的 dropdown class 都包含 -dropdown 或 -popup 或 -menu）
+        if (element.closest("[class*='-dropdown'], [class*='-popup'], [class*='-overlay'], [class*='-option-list'], [class*='-menu'], [class*='cascader-menus'], [class*='picker-dropdown']")) return false;
         if (!element.readOnly) return true;
         return element.getAttribute("role") === "combobox"
           || /select|picker|dropdown/i.test(String(element.className || ""))
