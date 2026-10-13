@@ -1,5 +1,5 @@
 (() => {
-  const CONTENT_VERSION = "0.5.2";
+  const CONTENT_VERSION = "0.5.3";
   if (globalThis.__resumeHelperContentLoaded === CONTENT_VERSION) {
     return;
   }
@@ -729,6 +729,10 @@
     [/^(?:入学时间|入学年月)$/i, "education[].start_date"],
     [/^(?:GPA|绩点|成绩排名|专业排名)$/i, "education[].gpa"],
     [/^(?:院系|学院|二级学院)$/i, "education[].department"],
+    [/^(?:导师姓名|导师|指导教师|advisor)$/i, "education[].adviser"],
+    [/^(?:学位)$/i, "education[].degree"],
+    [/^(?:学习成绩排名|成绩排名|专业排名|班级排名)$/i, "education[].rank"],
+    [/^(?:是否为学生干部|学生干部)$/i, "education[].student_leader"],
     
     // 工作/实习经历
     [/^(?:公司名称|企业名称|单位名称|公司|企业|单位|employer|company)$/i, "work_experience[].company"],

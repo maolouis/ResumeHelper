@@ -90,10 +90,10 @@ const documentTypeLabels = {
 
 function request(message) {
   return new Promise((resolve, reject) => {
-    // 添加超时机制：5秒后自动报错，避免一直转圈
+    // 添加超时机制：120秒后自动报错，避免一直转圈（填写大量字段需要时间）
     const timeoutId = setTimeout(() => {
       reject(new Error("请求超时，本地程序未响应"));
-    }, 5000);
+    }, 120000);
     
     chrome.runtime.sendMessage(message, (response) => {
       clearTimeout(timeoutId); // 收到响应后清除超时
