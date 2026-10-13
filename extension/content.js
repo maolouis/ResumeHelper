@@ -375,12 +375,24 @@
 
   function controls() {
     // 自动展开折叠区块：点击所有"+添加"/"添加经历"/"新增"等按钮
+    // 参考竞品 Resume FlashFill 的完整鼠标事件序列模拟
     try {
-      const addButtons = deepQueryAll("button, [role='button'], a, span").filter(isVisible);
+      const addButtons = deepQueryAll("button, [role='button'], a, span, div").filter(isVisible);
       for (const btn of addButtons) {
         const text = (btn.innerText || btn.textContent || "").trim();
-        if (/^(\+|添加|新增|增加|添加经历|添加项目|添加教育|添加工作)/.test(text) && text.length < 10) {
-          btn.click();
+        // 匹配各种"添加/新增"按钮
+        if (/^(?:\+|添加|新增|增加|添加经历|添加项目|添加教育|添加工作|添加实习|添加获奖|添加语言)/.test(text) && text.length < 15) {
+          // 完整的鼠标事件序列，确保触发复杂组件的展开逻辑
+          try {
+            btn.scrollIntoView({ behavior: "instant", block: "nearest" });
+            btn.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+            btn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+            btn.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+            btn.click();
+            btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+          } catch (e) {
+            btn.click();
+          }
         }
       }
     } catch (e) {}
