@@ -842,7 +842,10 @@
       "[role='option']", ".ui-select-item", ".ant-select-item-option", ".ant-cascader-menu-item", ".ant-picker-cell", ".ant-picker-now-btn",
       ".el-select-dropdown__item", ".el-cascader-node", ".ivu-select-item", ".ivu-date-picker-cells-cell",
       ".arco-select-option", ".semi-select-option", "[data-option-index]",
-      "[class*='dropdown']:not([style*='display: none']) [class*='option']"
+      "[class*='dropdown']:not([style*='display: none']) [class*='option']",
+      // 新增：更多自研组件库选择器
+      "[class*='select-item']", "[class*='option-item']", "[class*='dropdown-item']",
+      "[class*='picker-item']", "[class*='cascader-menu-item']"
     ].join(", ");
     const previouslyVisible = new Set(deepQueryAll(selectors).filter(isVisible));
     trigger.scrollIntoView({ block: "center", behavior: "auto" });
@@ -867,7 +870,7 @@
       .map((item) => ({ item, score: choiceScore(item.getAttribute("title") || item.getAttribute("aria-label") || item.innerText || item.textContent, desiredValues) }))
       .sort((left, right) => right.score - left.score);
     let target = rankVisibleOptions()[0];
-    target = target?.score >= 430 ? target.item : null;
+    target = target?.score >= 350 ? target.item : null;
     const input = control.matches("input") ? control : trigger.querySelector("input:not([type='hidden'])");
     if (!target && input && !input.readOnly && !input.disabled && ["text", "search"].includes(input.type)) {
       const trusted = trigger.matches(".select__control, [class*='select__control']")
@@ -887,7 +890,7 @@
       const ranked = candidates
         .map((item) => ({ item, score: choiceScore(item.getAttribute("title") || item.getAttribute("aria-label") || item.innerText || item.textContent, desiredValues) }))
         .sort((left, right) => right.score - left.score);
-      target = ranked[0]?.score >= 430 ? ranked[0].item : null;
+      target = ranked[0]?.score >= 350 ? ranked[0].item : null;
     }
     if (target) {
       target.scrollIntoView({ block: "nearest", behavior: "auto" });
@@ -969,7 +972,7 @@
       const ranked = [...control.options]
         .map((item) => ({ item, score: Math.max(choiceScore(item.textContent, desiredValues), choiceScore(item.value, desiredValues)) }))
         .sort((left, right) => right.score - left.score);
-      const option = ranked[0]?.score >= 430 ? ranked[0].item : null;
+      const option = ranked[0]?.score >= 350 ? ranked[0].item : null;
       if (!option) throw new Error(`下拉选项中没有“${text}”`);
       nativeSetter(control, "value", option.value);
       dispatchEvents(control);
@@ -980,7 +983,7 @@
         .filter((item) => !item.disabled && item.getAttribute("aria-disabled") !== "true")
         .map((item) => ({ item, score: Math.max(choiceScore(radioText(item), [text]), choiceScore(item.value, [text])) }))
         .sort((left, right) => right.score - left.score);
-      const target = ranked[0]?.score >= 430 ? ranked[0].item : null;
+      const target = ranked[0]?.score >= 350 ? ranked[0].item : null;
       if (!target) throw new Error(`单选项中没有“${text}”`);
       const clickTarget = target.closest("label, .radio-item, .radio, .ant-radio-wrapper, .el-radio, .ivu-radio-wrapper, [role='radio']") || target;
       clickTarget.click();
