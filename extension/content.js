@@ -1,5 +1,5 @@
 (() => {
-  const CONTENT_VERSION = "0.5.0";
+  const CONTENT_VERSION = "0.5.1";
   if (globalThis.__resumeHelperContentLoaded === CONTENT_VERSION) {
     return;
   }
@@ -911,6 +911,33 @@
       .replace(/年|月|日/g, "");
   }
 
+  // 级别语义归一化：提取核心级别词（解决"校级"匹配"校院级"、"省级"匹配"省市级"）
+  const LEVEL_PATTERNS = [
+    { std: "国际", pats: ["国际", "世界级", "世界"] },
+    { std: "国家", pats: ["国家", "全国"] },
+    { std: "省", pats: ["省"] },
+    { std: "市", pats: ["市"] },
+    { std: "校", pats: ["学校", "校级", "校"] },
+    { std: "院", pats: ["学院", "院级", "院"] },
+    { std: "区", pats: ["区", "区县"] },
+  ];
+  function extractLevelKeywords(text) {
+    const found = [];
+    for (const { std, pats } of LEVEL_PATTERNS) {
+      if (pats.some(p => text.includes(p)) && !found.includes(std)) found.push(std);
+    }
+    return found;
+  }
+  // 判断是否为级别类文本（含级别关键词才启用级别匹配，避免误伤普通字段）
+  function isLevelText(text) { return extractLevelKeywords(text).length > 0; }
+  // 语义级别匹配：wanted 的级别集合是 candidate 的子集（candidate 更宽泛），或反之
+  function levelSemanticMatch(candidateRaw, wantedRaw) {
+    const cKws = extractLevelKeywords(candidateRaw);
+    const wKws = extractLevelKeywords(wantedRaw);
+    if (cKws.length === 0 || wKws.length === 0) return false;
+    return wKws.every(k => cKws.includes(k)) || cKws.every(k => wKws.includes(k));
+  }
+
   // 常见选项同义词表
   const CHOICE_SYNONYMS = {
     "本科": ["本科", "大学本科", "本科学历", "学士学位", "大学"],
@@ -932,6 +959,25 @@
     "3个月": ["3个月", "三个月", "3月"],
     "6个月": ["6个月", "六个月", "6月"],
     "1年": ["1年", "一年", "12个月"],
+    // 级别类（跨网站归一化）
+    "国际级": ["国际级", "世界级", "国际", "世界"],
+    "国家级": ["国家级", "国家", "全国级", "全国"],
+    "省级": ["省级", "省", "省市级"],
+    "市级": ["市级", "市", "省市级"],
+    "校级": ["校级", "学校级", "校院级"],
+    "院级": ["院级", "学院级", "校院级"],
+    // 等级/名次类
+    "特等": ["特等奖", "特等", "特等奖学金"],
+    "一等": ["一等奖", "一等", "一等奖学金", "学业一等奖"],
+    "二等": ["二等奖", "二等", "二等奖学金"],
+    "三等": ["三等奖", "三等", "三等奖学金"],
+    "冠军": ["冠军", "第一名", "一等奖"],
+    "亚军": ["亚军", "第二名", "二等奖"],
+    "季军": ["季军", "第三名", "三等奖"],
+    // 学历补充
+    "本科": ["本科", "大学本科", "本科学历", "学士学位", "大学", "本科(全日制)"],
+    "全日制": ["全日制", "统招", "普通全日制", "全日制本科"],
+    "非全日制": ["非全日制", "在职", "自考", "成考"],
   };
   
   function choiceScore(candidate, desiredValues) {
@@ -977,7 +1023,16 @@
         best = Math.max(best, 700);
         continue;
       }
-      
+
+      // 3.5 级别语义匹配：解决"校级"匹配"校院级"、"省级"匹配"省市级"
+      if (levelSemanticMatch(candidate, desired)) {
+        // 级别完全等价给 720，包含关系给 680
+        const cKws = extractLevelKeywords(candidate);
+        const wKws = extractLevelKeywords(desired);
+        best = Math.max(best, cKws.length === wKws.length ? 720 : 680);
+        continue;
+      }
+
       // 4. 模糊相似度：最多600分
       best = Math.max(best, Math.round(similarity(candidateValue, wanted) * 600));
     }
@@ -1021,7 +1076,7 @@
       `${SELECT_WRAPPERS}, .ant-picker, [class*='picker']`
     ) || control;
     const selectors = [
-      "[role='option']", ".ui-select-item", ".ant-select-item-option", ".ant-cascader-menu-item", ".ant-picker-cell", ".ant-picker-now-btn",
+      "[role='option']", ".ui-select-item", ".ant-select-item-option", ".ant-select-dropdown-menu-item", ".ant-cascader-menu-item", ".ant-picker-cell", ".ant-picker-now-btn",
       ".el-select-dropdown__item", ".el-cascader-node", ".ivu-select-item", ".ivu-date-picker-cells-cell",
       ".arco-select-option", ".semi-select-option", "[data-option-index]",
       "[class*='dropdown']:not([style*='display: none']) [class*='option']",
@@ -1031,7 +1086,7 @@
     ].join(", ");
     const previouslyVisible = new Set(deepQueryAll(selectors).filter(isVisible));
     trigger.scrollIntoView({ block: "center", behavior: "auto" });
-    const clickTarget = trigger.querySelector("button[aria-label*='Toggle'], button[aria-label*='展开'], .ui-select-selection, .ant-select-selector, .el-select__wrapper, .ivu-select-selection, .arco-select-view, .semi-select-selection")
+    const clickTarget = trigger.querySelector("button[aria-label*='Toggle'], button[aria-label*='展开'], .ui-select-selection, .ant-select-selector, .ant-select-selection, .el-select__wrapper, .ivu-select-selection, .arco-select-view, .semi-select-selection")
       || (control.matches("[role='combobox'], input") ? control : trigger);
     clickTarget.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, composed: true, button: 0, buttons: 1 }));
     clickTarget.click();
@@ -1047,13 +1102,27 @@
       && await requestTrustedInput("selectOption", control, String(desired), desiredValues)) {
       return true;
     }
-    const rankVisibleOptions = () => deepQueryAll(selectors).filter(isVisible)
-      .filter((item) => !item.matches("[aria-disabled='true'], [disabled], .ui-select-item-disabled, .ant-select-item-option-disabled, .el-select-dropdown__item.is-disabled, .ivu-select-item-disabled"))
-      .map((item) => ({ item, score: choiceScore(item.getAttribute("title") || item.getAttribute("aria-label") || item.innerText || item.textContent, desiredValues) }))
-      .sort((left, right) => right.score - left.score);
-    let target = rankVisibleOptions()[0];
-    target = target?.score >= 300 ? target.item : null;
+    // 获取当前打开dropdown内可见选项并打分（不依赖搜索框过滤）
     const input = control.matches("input") ? control : trigger.querySelector("input:not([type='hidden'])");
+    const rankVisibleOptions = () => {
+      const menuIds = `${control.getAttribute("aria-controls") || ""} ${control.getAttribute("aria-owns") || ""} ${input?.getAttribute("aria-controls") || ""}`.trim().split(/\s+/).filter(Boolean);
+      return deepQueryAll(selectors).filter(isVisible)
+        .filter((item) => !item.matches("[aria-disabled='true'], [disabled], .ui-select-item-disabled, .ant-select-item-option-disabled, .ant-select-dropdown-menu-item-disabled, .el-select-dropdown__item.is-disabled, .ivu-select-item-disabled"))
+        .filter((item) => !previouslyVisible.has(item)
+          || menuIds.some((id) => document.getElementById(id)?.contains(item))
+          || trigger.contains(item))
+        .map((item) => ({ item, score: choiceScore(item.getAttribute("title") || item.getAttribute("aria-label") || item.innerText || item.textContent, desiredValues) }))
+        .sort((left, right) => right.score - left.score);
+    };
+    let target = null;
+    // 阶段1：不输入搜索文字，等待选项渲染并直接在可见选项中做语义匹配
+    // （Ant Design子串过滤会把"省级"过滤掉"省市级"，所以不能依赖搜索框）
+    for (let attempt = 0; attempt < 25 && !target; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const ranked = rankVisibleOptions();
+      target = ranked[0]?.score >= 350 ? ranked[0].item : null;
+    }
+    // 阶段2：兜底——如果可见选项中没匹配到，才尝试在搜索框输入文字
     if (!target && input && !input.readOnly && !input.disabled && ["text", "search"].includes(input.type)) {
       const trusted = trigger.matches(".select__control, [class*='select__control']")
         && await requestTrustedInput("replaceText", input, String(desired));
@@ -1061,18 +1130,9 @@
         nativeSetter(input, "value", String(desired));
         input.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: String(desired) }));
       }
-    }
-    for (let attempt = 0; attempt < 30 && !target; attempt += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      const menuIds = `${control.getAttribute("aria-controls") || ""} ${control.getAttribute("aria-owns") || ""} ${input?.getAttribute("aria-controls") || ""}`.trim().split(/\s+/).filter(Boolean);
-      const candidates = deepQueryAll(selectors).filter(isVisible)
-        .filter((item) => !item.matches("[aria-disabled='true'], [disabled], .ui-select-item-disabled, .ant-select-item-option-disabled, .el-select-dropdown__item.is-disabled, .ivu-select-item-disabled"))
-        .filter((item) => trigger.contains(item) || !previouslyVisible.has(item)
-          || menuIds.some((id) => document.getElementById(id)?.contains(item)));
-      const ranked = candidates
-        .map((item) => ({ item, score: choiceScore(item.getAttribute("title") || item.getAttribute("aria-label") || item.innerText || item.textContent, desiredValues) }))
-        .sort((left, right) => right.score - left.score);
-      target = ranked[0]?.score >= 300 ? ranked[0].item : null;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const ranked = rankVisibleOptions();
+      target = ranked[0]?.score >= 350 ? ranked[0].item : null;
     }
     if (target) {
       target.scrollIntoView({ block: "nearest", behavior: "auto" });
@@ -1081,14 +1141,14 @@
       await new Promise((resolve) => setTimeout(resolve, 100));
       if (isVisible(target)
         && target.getAttribute("aria-selected") !== "true"
-        && !target.matches(".ui-select-item-selected, .ant-select-item-option-selected, .el-select-dropdown__item.is-selected, .ivu-select-item-selected, .arco-select-option-selected, .semi-select-option-selected, .select__option--is-selected, [class*='option--is-selected']")) {
+        && !target.matches(".ui-select-item-selected, .ant-select-item-option-selected, .ant-select-dropdown-menu-item-selected, .el-select-dropdown__item.is-selected, .ivu-select-item-selected, .arco-select-option-selected, .semi-select-option-selected, .select__option--is-selected, [class*='option--is-selected']")) {
         await requestTrustedInput("click", target);
       }
       for (let attempt = 0; attempt < 6; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 50));
         if ((choiceScore(currentValue(control), desiredValues) >= 430 && !isVisible(target))
           || target.getAttribute("aria-selected") === "true"
-          || target.matches(".ui-select-item-selected, .ant-select-item-option-selected, .el-select-dropdown__item.is-selected, .ivu-select-item-selected, .arco-select-option-selected, .semi-select-option-selected, .select__option--is-selected, [class*='option--is-selected']")) return true;
+          || target.matches(".ui-select-item-selected, .ant-select-item-option-selected, .ant-select-dropdown-menu-item-selected, .el-select-dropdown__item.is-selected, .ivu-select-item-selected, .arco-select-option-selected, .semi-select-option-selected, .select__option--is-selected, [class*='option--is-selected']")) return true;
       }
       throw new Error(`已点击“${textOfOption(target)}”，但页面未确认选择，请手动核对`);
     }
@@ -1110,7 +1170,7 @@
 
   function dateInputValues(input, text, label = "") {
     const match = String(text).match(/^(\d{4})[-/.年](\d{1,2})(?:[-/.月](\d{1,2}))?/);
-    if (!match) return [text];
+    if (!match) return [];  // 无法解析为日期格式（如"至今"），跳过
     const year = match[1];
     const month = String(Number(match[2])).padStart(2, "0");
     const day = String(Number(match[3] || 1)).padStart(2, "0");
@@ -1125,8 +1185,10 @@
 
   async function fillDateControl(control, descriptor, text) {
     const input = control.matches("input") ? control : control.querySelector?.("input:not([type='hidden'])");
-    if (!input || input.disabled) throw new Error(`日期字段“${descriptor.label}”没有可写输入框`);
-    for (const candidate of dateInputValues(input, text, descriptor.label)) {
+    if (!input || input.disabled) throw new Error(`日期字段"${descriptor.label}"没有可写输入框`);
+    const candidates = dateInputValues(input, text, descriptor.label);
+    if (!candidates.length) throw new Error(`日期值"${text}"无法解析为有效日期，跳过`);
+    for (const candidate of candidates) {
       input.focus();
       nativeSetter(input, "value", candidate);
       input.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: candidate }));

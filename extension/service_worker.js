@@ -10,7 +10,13 @@ chrome.runtime.onStartup.addListener(() => {
 
 function callNative(payload) {
   return new Promise((resolve, reject) => {
+    // 添加超时机制：5秒后报错
+    const timeoutId = setTimeout(() => {
+      reject(new Error("连接本地程序超时，请确认简历快填程序已启动"));
+    }, 5000);
+    
     chrome.runtime.sendNativeMessage(NATIVE_HOST, payload, (response) => {
+      clearTimeout(timeoutId);
       if (chrome.runtime.lastError) {
         reject(new Error(`无法连接本地程序：${chrome.runtime.lastError.message}`));
         return;

@@ -336,6 +336,72 @@ def _parse_award_line(line: str) -> dict:
     return record
 
 
+# 奖项级别前缀（用于分组和继承级别）
+_AWARD_LEVEL_PREFIX = r"(国家级|省级|市级|校级|院级|国际级|区级)"
+# 奖项等级（从奖项名称提取）
+_AWARD_GRADE = r"(特等奖|一等奖|二等奖|三等奖|金奖|银奖|铜奖|优秀奖|冠军|亚军|季军|一等奖|二等奖|三等奖)"
+
+
+def _merge_award_lines(lines: list[str]) -> list[str]:
+    """合并奖项区块的 PDF 断句：以"证书/级别："开头的为新组，否则并入上一行。"""
+    merged: list[str] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        is_new_group = bool(re.match(r"^(证书|国家级|省级|市级|校级|院级|国际级|区级)\s*[:：]", line))
+        if is_new_group or not merged:
+            merged.append(line)
+        else:
+            merged[-1] += line
+    return merged
+
+
+def _parse_award_lines(lines: list[str]) -> list[dict]:
+    merged = _merge_award_lines(lines)
+    records: list[dict] = []
+    for line in merged:
+        # 1. 证书行：按顿号/逗号拆分独立证书
+        cert_match = re.match(r"^证书\s*[:：]\s*(.+)$", line)
+        if cert_match:
+            cert_text = cert_match[1].strip().rstrip("。.")
+            parts = [p.strip() for p in re.split(r"[、,，]", cert_text) if p.strip()]
+            for part in parts:
+                # 跳过纯描述性补充（如"英语四六级均超过500分"）
+                if re.search(r"均超过|均达到|均不低于|均在", part) and not re.search(r"证书|驾驶证", part):
+                    # 作为语言能力补充，暂不单独成项
+                    continue
+                records.append({"name": part, "category": "证书"})
+            continue
+
+        # 2. 级别行：提取级别，拆分多个奖项
+        level_match = re.match(r"^" + _AWARD_LEVEL_PREFIX + r"\s*[:：]\s*(.+)$", line)
+        if level_match:
+            level = level_match[1]
+            award_text = level_match[2].strip().rstrip("。.")
+        else:
+            level = ""
+            award_text = line.strip().rstrip("。.")
+
+        # 提取可能的年份
+        date, award_text = _extract_loose_date(award_text)
+        award_text = award_text.strip()
+
+        # 按顿号拆分独立奖项
+        awards = [a.strip() for a in re.split(r"[、]", award_text) if a.strip()]
+        for award in awards:
+            record = {"name": award, "category": "奖项"}
+            if level:
+                record["level"] = level
+            if date:
+                record["date"] = date
+            grade = re.search(_AWARD_GRADE, award)
+            if grade:
+                record["grade"] = grade[1]
+            records.append(record)
+    return records
+
+
 def _parse_language_line(line: str) -> dict:
     language = re.search(r"(英语|中文|汉语|普通话|日语|法语|德语|俄语|韩语|西班牙语|粤语|English|Japanese|French|German)", line, re.I)
     certificate = re.search(r"(CET[- ]?[46]|TEM[- ]?[48]|IELTS|TOEFL|TOEIC|HSK\s*\d*|大学英语[四六]级|雅思|托福|专四|专八)", line, re.I)
@@ -353,16 +419,68 @@ def _parse_language_line(line: str) -> dict:
     return record
 
 
+def _merge_broken_lines(lines: list[str]) -> list[str]:
+    """合并 PDF 换行导致的断句。"""
+    merged: list[str] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        # 句子结束符（句号/分号/感叹号等）
+        ends_sentence = bool(re.search(r"[。.；;！!？?]$", line))
+        # 下一行是新列表项的标志（以数字、项目符号、顿号开头等）
+        starts_new_item = bool(re.match(r"^(?:[·•\-*\d]+[.、)）]|[一二三四五六七八九十]+[、.])", line))
+        # 如果已有内容，且当前行不是新项，且上一行没有结束句子，则合并
+        if merged and not starts_new_item and not bool(re.search(r"[。.；;！!？?]$", merged[-1])):
+            merged[-1] = merged[-1] + line
+        else:
+            merged.append(line)
+    return merged
+
+
+# 常见技能关键词（用于从描述段落中提取技能名）
+_SKILL_KEYWORDS = [
+    "Python", "C++", "C语言", "Java", "MATLAB", "ROS", "ROS2", "Linux",
+    "Ubuntu", "STM32", "PyTorch", "TensorFlow", "MindSpore", "OpenCV",
+    "YOLO", "ResNet", "PID", "LQR", "ADRC", "SLAM", "Cartographer",
+    "PX4", "Git", "Docker", "HTML", "CSS", "JavaScript", "MySQL",
+    "PLC", "Keras", "Pandas", "NumPy", "Halcon",
+]
+
+
 def _parse_skill_lines(lines: list[str]) -> list[dict]:
+    # 先合并 PDF 断句
+    lines = _merge_broken_lines(lines)
     records = []
     for line in lines:
+        # 1. 简单列表：用顿号/逗号/分号分隔，且每部分较短
         parts = [part.strip() for part in re.split(r"[、,，;；]", line) if part.strip()]
-        simple_list = len(parts) > 1 and all(len(part) <= 35 and not re.search(r"能够|负责|使用|掌握|熟悉|精通.+(?:及|和)", part) for part in parts)
+        simple_list = len(parts) > 1 and all(
+            len(part) <= 20 and not re.search(r"能够|负责|使用|掌握|熟悉|精通", part)
+            for part in parts
+        )
         if simple_list:
             records.extend({"name": part} for part in parts)
             continue
+
+        # 2. "技能名：描述" 格式
         match = re.match(r"^([^:：]{1,35})[:：]\s*(.+)$", line)
-        records.append({"name": match[1].strip() if match else line, **({"description": match[2].strip()} if match else {})})
+        if match:
+            records.append({"name": match[1].strip(), "description": match[2].strip()})
+            continue
+
+        # 3. 长描述段落：提取技能关键词作为名称，整段放描述
+        found_keywords = [kw for kw in _SKILL_KEYWORDS if kw.lower() in line.lower()]
+        if found_keywords and len(line) > 30:
+            # 技能名取前几个关键词，描述放整段
+            records.append({
+                "name": "、".join(found_keywords[:3]),
+                "description": line,
+            })
+        else:
+            # 兜底：截断过长的名称
+            records.append({"name": line if len(line) <= 50 else line[:50] + "…",
+                            **({"description": line} if len(line) > 50 else {})})
     return records
 
 
@@ -428,6 +546,12 @@ def _unlabelled_records(section: str, lines: list[str]) -> list[dict]:
 
 
 def _parse_specialized_lines(section: str, lines: list[str]) -> list[dict]:
+    # 专业技能需要跨行合并 PDF 断句，一次性传入所有行
+    if section == "professional_skills":
+        return _parse_skill_lines(lines)
+    # 奖项/证书需要跨行合并、按级别分组，一次性传入所有行
+    if section == "certificates_awards":
+        return _parse_award_lines(lines)
     records = []
     for line in lines:
         labelled = _labelled_values(section, line)

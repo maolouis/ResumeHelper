@@ -330,7 +330,7 @@ function localSemanticMatch(fields) {
           }
           
           // 上下文权重加成
-          if (contextSection && fieldDef.key.startsWith(contextSection + "[].") {
+          if (contextSection && fieldDef.key.startsWith(contextSection + "[].")) {
             sim += 0.2; // 上下文匹配加分（提高到0.2）
           }
           
@@ -368,7 +368,7 @@ function localSemanticMatch(fields) {
         }
         
         // 上下文权重
-        if (contextSection && fieldDef.key.startsWith(contextSection + "[].") {
+        if (contextSection && fieldDef.key.startsWith(contextSection + "[].")) {
           score += 300;
         }
         
