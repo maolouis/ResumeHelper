@@ -374,6 +374,16 @@
   }
 
   function controls() {
+    // 自动展开折叠区块：点击所有"+添加"/"添加经历"/"新增"等按钮
+    try {
+      const addButtons = deepQueryAll("button, [role='button'], a, span").filter(isVisible);
+      for (const btn of addButtons) {
+        const text = (btn.innerText || btn.textContent || "").trim();
+        if (/^(\+|添加|新增|增加|添加经历|添加项目|添加教育|添加工作)/.test(text) && text.length < 10) {
+          btn.click();
+        }
+      }
+    } catch (e) {}
     const seen = new Set();
     const all = deepQueryAll(`input, select, textarea, [contenteditable='true'], [role='radio'], ${SELECT_WRAPPERS}, ${DATE_WRAPPERS}, ${RADIO_GROUPS}`);
     // 对于 select/date 容器，只保留最外层（不被其他容器包含的），避免内部子元素重复收集
@@ -431,7 +441,7 @@
       });
     const descriptors = rawResults
       .filter((descriptor) => descriptor.label)
-      .filter((descriptor) => !/^(YYYY|MM|DD)\b|^\s*\/\s*$/.test(descriptor.label.trim()))
+      .filter((descriptor) => !/拖拽|上传|选择文件|将你的简历|支持格式/.test(descriptor.label.trim()))
       .filter((descriptor) => !isNavigationSearch(descriptor.control, descriptor.labelCandidates));
     return descriptors;
   }
