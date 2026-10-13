@@ -394,11 +394,15 @@
       // 匹配区块关键词，确定每个按钮属于哪个区块
       const sectionPatterns = [
         { section: "education", pattern: /教育|学历/ },
-        { section: "work_experience", pattern: /工作|实习/ },
-        { section: "projects", pattern: /项目/ },
-        { section: "certificates_awards", pattern: /获奖|奖励|荣誉|证书/ },
+        { section: "work_experience", pattern: /工作|实习|职业/ },
+        { section: "projects", pattern: /项目|科研/ },
+        { section: "certificates_awards", pattern: /获奖|奖励|荣誉|证书|奖项/ },
         { section: "language_skills", pattern: /语言|外语/ },
-        { section: "professional_skills", pattern: /技能/ },
+        { section: "professional_skills", pattern: /专业技能|技能特长|技术能力/ },
+        { section: "campus_experience", pattern: /校园|社团|学生工作|校内实践|在校实践/ },
+        { section: "trainings", pattern: /培训/ },
+        { section: "publications", pattern: /论文|著作|发表/ },
+        { section: "patents", pattern: /专利|软著|软件著作权/ },
       ];
       
       for (const btn of addButtons) {
@@ -644,23 +648,27 @@
   
   // 否定关键词：如果 label 包含这些词，不匹配个人基本信息字段
   const NEGATIVE_KEYWORDS = {
-    "basic.name": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /介绍人/, /家属/, /紧急联系人/, /领导/, /老师/, /主管/, /同事/, /HR/, /招聘方/, /上级/, /下属/, /联系人姓名/, /导师姓名/],
+    "basic.name": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /介绍人/, /家属/, /紧急联系人/, /领导/, /老师/, /主管/, /同事/, /HR/, /招聘方/, /上级/, /下属/, /联系人姓名/, /导师姓名/, /证明人姓名/, /推荐人姓名/, /联系人名字/],
     "basic.gender": [],
-    "basic.phone": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/, /家属/, /HR/, /招聘方/],
-    "basic.email": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/, /家属/, /HR/, /招聘方/],
+    "basic.phone": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/, /家属/, /HR/, /招聘方/, /同事/],
+    "basic.email": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/, /家属/, /HR/, /招聘方/, /同事/],
     "basic.id_number": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/, /家属/],
     "basic.nationality_country": [],
   };
   
   // 上下文感知：在特定区块内的字段应该匹配对应的上下文字段
   const CONTEXT_BLOCK_KEYWORDS = [
-    { context: "education", keywords: [/教育经历/, /教育背景/, /学历信息/, /学业信息/] },
-    { context: "internship", keywords: [/实习经历/, /实习信息/, /实习单位/] },
-    { context: "work", keywords: [/工作经历/, /工作经验/, /职业经历/] },
-    { context: "project", keywords: [/项目经历/, /项目经验/, /科研项目/] },
-    { context: "reward", keywords: [/获奖经历/, /荣誉奖项/, /奖励情况/] },
-    { context: "language", keywords: [/语言能力/, /外语水平/] },
-    { context: "skill", keywords: [/专业技能/, /技能特长/, /技术能力/] },
+    { context: "education", keywords: [/教育经历/, /教育背景/, /学历信息/, /学业信息/, /教育信息/, /学历背景/] },
+    { context: "internship", keywords: [/实习经历/, /实习信息/, /实习单位/, /实习工作/] },
+    { context: "work", keywords: [/工作经历/, /工作经验/, /职业经历/, /工作信息/, /职业背景/] },
+    { context: "project", keywords: [/项目经历/, /项目经验/, /科研项目/, /项目信息/, /工程项目/] },
+    { context: "reward", keywords: [/获奖经历/, /荣誉奖项/, /奖励情况/, /获奖信息/, /荣誉奖励/, /证书奖项/] },
+    { context: "language", keywords: [/语言能力/, /外语水平/, /语言信息/, /外语能力/] },
+    { context: "skill", keywords: [/专业技能/, /技能特长/, /技术能力/, /技能信息/, /专业特长/] },
+    { context: "campus", keywords: [/校园经历/, /在校实践/, /社团活动/, /学生工作/, /校内实践/] },
+    { context: "training", keywords: [/培训经历/, /培训信息/, /培训记录/] },
+    { context: "publication", keywords: [/论文著作/, /发表成果/, /学术成果/, /论文信息/] },
+    { context: "patent", keywords: [/专利信息/, /专利成果/, /软件著作权/] },
   ];
   
   // 检测字段所在的上下文区块
@@ -709,6 +717,8 @@
     [/^(?:年龄|age)$/i, "basic.age"],
     [/^(?:出生日期|出生年月|生日)$/i, "basic.birth_date"],
     [/^(?:期望工作地点|期望城市|意向城市|preferredcity)$/i, "basic.preferred_city"],
+    [/^(?:现居地|居住地|所在地|现住址)$/i, "basic.address"],
+    [/^(?:可实习时长|实习时长|可到岗时间|到岗时间)$/i, "basic.available_duration"],
     
     // 教育经历
     [/^(?:毕业学校|毕业院校|学校名称|最高学历学校|最高毕业院校|graduationschool|institution|university)$/i, "education[].school"],
@@ -718,6 +728,38 @@
     [/^(?:毕业时间|毕业日期|毕业年月|起止时间|最高学历毕业时间|graduationdate|graduationtime|educationenddate)$/i, "education[].end_date"],
     [/^(?:入学时间|入学年月)$/i, "education[].start_date"],
     [/^(?:GPA|绩点|成绩排名|专业排名)$/i, "education[].gpa"],
+    [/^(?:院系|学院|二级学院)$/i, "education[].department"],
+    
+    // 工作/实习经历
+    [/^(?:公司名称|企业名称|单位名称|公司|企业|单位|employer|company)$/i, "work_experience[].company"],
+    [/^(?:职位名称|岗位名称|职位|岗位|职务|position|jobtitle)$/i, "work_experience[].position"],
+    [/^(?:部门|部门名称|department)$/i, "work_experience[].department"],
+    [/^(?:入职时间|入职年月|开始工作时间)$/i, "work_experience[].start_date"],
+    [/^(?:离职时间|离职年月|结束工作时间)$/i, "work_experience[].end_date"],
+    [/^(?:工作描述|工作内容|工作职责|工作业绩|jobdescription)$/i, "work_experience[].description"],
+    
+    // 项目经历
+    [/^(?:项目名称|项目名|项目标题|projectname)$/i, "projects[].name"],
+    [/^(?:项目角色|项目职务|担任角色|项目职位)$/i, "projects[].role"],
+    [/^(?:项目开始时间|项目开始日期)$/i, "projects[].start_date"],
+    [/^(?:项目结束时间|项目结束日期)$/i, "projects[].end_date"],
+    [/^(?:项目描述|项目内容|项目职责|项目业绩)$/i, "projects[].description"],
+    
+    // 证书与奖项
+    [/^(?:证书名称|奖项名称|证书|奖项|获奖名称|荣誉名称|certificatename|awardname)$/i, "certificates_awards[].name"],
+    [/^(?:证书等级|奖项等级|等级|级别|获奖级别|awardlevel)$/i, "certificates_awards[].level"],
+    [/^(?:获得时间|获奖时间|颁发时间|证书时间)$/i, "certificates_awards[].date"],
+    [/^(?:证书描述|奖项描述|获奖描述)$/i, "certificates_awards[].description"],
+    
+    // 语言能力
+    [/^(?:语种|语言|外语|语言种类|languagetype)$/i, "language_skills[].language"],
+    [/^(?:语言水平|外语水平|语言程度|熟练程度)$/i, "language_skills[].level"],
+    [/^(?:语言证书|英语证书|外语证书|证书名称)$/i, "language_skills[].certificate"],
+    [/^(?:语言成绩|分数|考试成绩)$/i, "language_skills[].score"],
+    
+    // 专业技能
+    [/^(?:技能名称|技能|技术名称|技能类型)$/i, "professional_skills[].name"],
+    [/^(?:技能水平|熟练程度|掌握程度)$/i, "professional_skills[].level"],
     
     // 其他
     [/^(?:country|国家|地区|所在国家)$/i, "basic.nationality_country"],
@@ -869,6 +911,29 @@
       .replace(/年|月|日/g, "");
   }
 
+  // 常见选项同义词表
+  const CHOICE_SYNONYMS = {
+    "本科": ["本科", "大学本科", "本科学历", "学士学位", "大学"],
+    "硕士": ["硕士", "研究生", "硕士研究生", "硕士学历", "硕士学位"],
+    "博士": ["博士", "博士研究生", "博士学历", "博士学位"],
+    "大专": ["大专", "专科", "大学专科", "专科学历"],
+    "高中": ["高中", "普通高中", "高中文凭"],
+    "男": ["男", "男性", "M", "male"],
+    "女": ["女", "女性", "F", "female"],
+    "汉族": ["汉族", "汉"],
+    "中国": ["中国", "中国大陆", "中华人民共和国", "CN", "china"],
+    "党员": ["中共党员", "党员", "共产党员"],
+    "团员": ["共青团员", "团员", "共青团"],
+    "群众": ["群众", "普通公民"],
+    "广州": ["广州", "广州市", "Guangzhou"],
+    "深圳": ["深圳", "深圳市", "Shenzhen"],
+    "北京": ["北京", "北京市", "Beijing"],
+    "上海": ["上海", "上海市", "Shanghai"],
+    "3个月": ["3个月", "三个月", "3月"],
+    "6个月": ["6个月", "六个月", "6月"],
+    "1年": ["1年", "一年", "12个月"],
+  };
+  
   function choiceScore(candidate, desiredValues) {
     const candidateValue = normalizeChoice(candidate);
     if (!candidateValue) return 0;
@@ -876,9 +941,45 @@
     for (const desired of desiredValues) {
       const wanted = normalizeChoice(desired);
       if (!wanted) continue;
-      if (candidateValue === wanted) best = Math.max(best, 1000);
-      else if (candidateValue.includes(wanted) || wanted.includes(candidateValue)) best = Math.max(best, 750 - Math.abs(candidateValue.length - wanted.length));
-      else best = Math.max(best, Math.round(similarity(candidateValue, wanted) * 600));
+      
+      // 1. 完全匹配：1000分
+      if (candidateValue === wanted) {
+        best = Math.max(best, 1000);
+        continue;
+      }
+      
+      // 2. 包含匹配：750分
+      if (candidateValue.includes(wanted) || wanted.includes(candidateValue)) {
+        best = Math.max(best, 750 - Math.abs(candidateValue.length - wanted.length));
+        continue;
+      }
+      
+      // 3. 同义词匹配：700分
+      let synonymMatch = false;
+      for (const [key, synonyms] of Object.entries(CHOICE_SYNONYMS)) {
+        // 检查 desired 是否在同义词列表里
+        if (synonyms.some(s => normalizeChoice(s) === wanted)) {
+          // 检查 candidate 是否在同一个同义词组里
+          if (synonyms.some(s => normalizeChoice(s) === candidateValue)) {
+            synonymMatch = true;
+            break;
+          }
+        }
+        // 反过来检查
+        if (synonyms.some(s => normalizeChoice(s) === candidateValue)) {
+          if (synonyms.some(s => normalizeChoice(s) === wanted)) {
+            synonymMatch = true;
+            break;
+          }
+        }
+      }
+      if (synonymMatch) {
+        best = Math.max(best, 700);
+        continue;
+      }
+      
+      // 4. 模糊相似度：最多600分
+      best = Math.max(best, Math.round(similarity(candidateValue, wanted) * 600));
     }
     return best;
   }
@@ -951,7 +1052,7 @@
       .map((item) => ({ item, score: choiceScore(item.getAttribute("title") || item.getAttribute("aria-label") || item.innerText || item.textContent, desiredValues) }))
       .sort((left, right) => right.score - left.score);
     let target = rankVisibleOptions()[0];
-    target = target?.score >= 350 ? target.item : null;
+    target = target?.score >= 300 ? target.item : null;
     const input = control.matches("input") ? control : trigger.querySelector("input:not([type='hidden'])");
     if (!target && input && !input.readOnly && !input.disabled && ["text", "search"].includes(input.type)) {
       const trusted = trigger.matches(".select__control, [class*='select__control']")
@@ -971,7 +1072,7 @@
       const ranked = candidates
         .map((item) => ({ item, score: choiceScore(item.getAttribute("title") || item.getAttribute("aria-label") || item.innerText || item.textContent, desiredValues) }))
         .sort((left, right) => right.score - left.score);
-      target = ranked[0]?.score >= 350 ? ranked[0].item : null;
+      target = ranked[0]?.score >= 300 ? ranked[0].item : null;
     }
     if (target) {
       target.scrollIntoView({ block: "nearest", behavior: "auto" });
@@ -1053,7 +1154,7 @@
       const ranked = [...control.options]
         .map((item) => ({ item, score: Math.max(choiceScore(item.textContent, desiredValues), choiceScore(item.value, desiredValues)) }))
         .sort((left, right) => right.score - left.score);
-      const option = ranked[0]?.score >= 350 ? ranked[0].item : null;
+      const option = ranked[0]?.score >= 300 ? ranked[0].item : null;
       if (!option) throw new Error(`下拉选项中没有“${text}”`);
       nativeSetter(control, "value", option.value);
       dispatchEvents(control);
@@ -1064,7 +1165,7 @@
         .filter((item) => !item.disabled && item.getAttribute("aria-disabled") !== "true")
         .map((item) => ({ item, score: Math.max(choiceScore(radioText(item), [text]), choiceScore(item.value, [text])) }))
         .sort((left, right) => right.score - left.score);
-      const target = ranked[0]?.score >= 350 ? ranked[0].item : null;
+      const target = ranked[0]?.score >= 300 ? ranked[0].item : null;
       if (!target) throw new Error(`单选项中没有“${text}”`);
       const clickTarget = target.closest("label, .radio-item, .radio, .ant-radio-wrapper, .el-radio, .ivu-radio-wrapper, [role='radio']") || target;
       clickTarget.click();

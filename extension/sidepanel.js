@@ -90,7 +90,13 @@ const documentTypeLabels = {
 
 function request(message) {
   return new Promise((resolve, reject) => {
+    // 添加超时机制：5秒后自动报错，避免一直转圈
+    const timeoutId = setTimeout(() => {
+      reject(new Error("请求超时，本地程序未响应"));
+    }, 5000);
+    
     chrome.runtime.sendMessage(message, (response) => {
+      clearTimeout(timeoutId); // 收到响应后清除超时
       if (chrome.runtime.lastError) {
         reject(new Error(chrome.runtime.lastError.message));
         return;
@@ -219,39 +225,70 @@ function localSemanticMatch(fields) {
     { key: "basic.ethnicity", name: "民族", aliases: ["族群"] },
     { key: "basic.political_status", name: "政治面貌", aliases: ["政治情况"] },
     { key: "basic.birthday", name: "出生日期", aliases: ["生日", "出生年月"] },
-    { key: "basic.address", name: "现居地", aliases: ["居住地", "所在地", "籍贯"] },
+    { key: "basic.native_place", name: "家乡", aliases: ["籍贯", "生源地", "原生地"] },
+    { key: "basic.address", name: "现居地", aliases: ["居住地", "所在地", "现住址"] },
+    { key: "basic.age", name: "年龄", aliases: ["岁数"] },
+    { key: "basic.preferred_city", name: "期望工作地点", aliases: ["期望城市", "意向城市", "期望地点"] },
+    { key: "basic.available_duration", name: "可实习时长", aliases: ["实习时长", "可到岗时间", "到岗时间"] },
+    
     { key: "education[].school", name: "学校名称", aliases: ["院校", "毕业院校", "毕业学校", "学校"] },
     { key: "education[].degree", name: "学历", aliases: ["学位", "最高学历", "学历层次"] },
     { key: "education[].major", name: "专业", aliases: ["所学专业", "专业名称"] },
     { key: "education[].start_date", name: "入学时间", aliases: ["开始时间", "入学年月"] },
     { key: "education[].end_date", name: "毕业时间", aliases: ["结束时间", "毕业年月", "预计毕业"] },
     { key: "education[].gpa", name: "GPA", aliases: ["平均成绩", "绩点", "成绩排名"] },
+    { key: "education[].study_type", name: "学历类型", aliases: ["学习形式", "培养方式", "学制"] },
+    { key: "education[].department", name: "院系", aliases: ["学院", "二级学院"] },
+    
     { key: "work_experience[].company", name: "公司名称", aliases: ["企业名称", "单位名称", "公司", "企业", "单位"] },
     { key: "work_experience[].position", name: "职位", aliases: ["岗位", "职务", "职位名称"] },
+    { key: "work_experience].department", name: "部门", aliases: ["部门名称"] },
     { key: "work_experience[].start_date", name: "入职时间", aliases: ["开始时间", "入职年月"] },
     { key: "work_experience[].end_date", name: "离职时间", aliases: ["结束时间", "离职年月"] },
     { key: "work_experience[].description", name: "工作描述", aliases: ["工作内容", "工作职责", "工作业绩"] },
+    
     { key: "projects[].name", name: "项目名称", aliases: ["项目名", "项目标题"] },
     { key: "projects[].role", name: "项目角色", aliases: ["角色", "担任角色", "项目职务"] },
+    { key: "projects[].start_date", name: "项目开始时间", aliases: ["项目开始日期"] },
+    { key: "projects[].end_date", name: "项目结束时间", aliases: ["项目结束日期"] },
     { key: "projects[].description", name: "项目描述", aliases: ["项目内容", "项目职责", "项目业绩"] },
+    
     { key: "certificates_awards[].name", name: "证书名称", aliases: ["奖项名称", "证书", "奖项", "获奖名称", "荣誉名称"] },
     { key: "certificates_awards[].level", name: "证书等级", aliases: ["奖项等级", "等级", "级别", "奖项级别", "获奖级别"] },
     { key: "certificates_awards[].date", name: "获得时间", aliases: ["获奖时间", "颁发时间", "证书时间"] },
+    { key: "certificates_awards[].description", name: "证书描述", aliases: ["奖项描述", "获奖描述"] },
+    
     { key: "language_skills[].language", name: "语种", aliases: ["语言", "外语", "外语种类"] },
     { key: "language_skills[].level", name: "语言水平", aliases: ["水平", "程度", "熟练程度"] },
     { key: "language_skills[].certificate", name: "语言证书", aliases: ["证书", "英语证书", "语言成绩"] },
+    { key: "language_skills[].score", name: "语言成绩", aliases: ["分数", "考试成绩"] },
+    
     { key: "professional_skills[].name", name: "技能名称", aliases: ["技能", "技术", "专业技能"] },
     { key: "professional_skills[].level", name: "技能水平", aliases: ["熟练程度", "水平", "掌握程度"] },
+    
+    { key: "campus_experience[].organization", name: "组织名称", aliases: ["社团名称", "学生会名称"] },
+    { key: "campus_experience[].position", name: "担任职务", aliases: ["职务", "职位"] },
+    { key: "campus_experience[].description", name: "活动描述", aliases: ["活动内容", "工作职责"] },
+    
+    { key: "publications[].title", name: "论文标题", aliases: ["论文名称", "著作名称"] },
+    { key: "publications[].journal", name: "发表期刊", aliases: ["期刊名称", "发表刊物"] },
+    
+    { key: "patents[].name", name: "专利名称", aliases: ["专利名称"] },
+    { key: "patents[].number", name: "专利号", aliases: ["专利编号"] },
   ];
   
   // 上下文区块关键词
   const CONTEXT_BLOCKS = [
-    { keywords: ["教育经历", "教育背景", "学历信息"], section: "education" },
-    { keywords: ["工作经历", "实习经历", "职业经历"], section: "work_experience" },
-    { keywords: ["项目经历", "项目经验"], section: "projects" },
-    { keywords: ["获奖经历", "荣誉奖项", "证书"], section: "certificates_awards" },
-    { keywords: ["语言能力", "外语水平", "英语"], section: "language_skills" },
-    { keywords: ["专业技能", "技能特长"], section: "professional_skills" },
+    { keywords: ["教育经历", "教育背景", "学历信息", "学业信息", "教育信息", "学历背景"], section: "education" },
+    { keywords: ["工作经历", "实习经历", "职业经历", "工作经验", "实习信息", "职业背景"], section: "work_experience" },
+    { keywords: ["项目经历", "项目经验", "科研项目", "项目信息", "工程项目"], section: "projects" },
+    { keywords: ["获奖经历", "荣誉奖项", "证书", "奖励情况", "获奖信息", "荣誉奖励", "证书奖项"], section: "certificates_awards" },
+    { keywords: ["语言能力", "外语水平", "英语", "语言信息", "外语能力"], section: "language_skills" },
+    { keywords: ["专业技能", "技能特长", "技术能力", "技能信息", "专业特长"], section: "professional_skills" },
+    { keywords: ["校园经历", "在校实践", "社团活动", "学生工作", "校内实践"], section: "campus_experience" },
+    { keywords: ["培训经历", "培训信息", "培训记录"], section: "training" },
+    { keywords: ["论文著作", "发表成果", "学术成果", "论文信息"], section: "publications" },
+    { keywords: ["专利信息", "专利成果", "软件著作权"], section: "patents" },
   ];
   
   const result = {};
@@ -294,11 +331,11 @@ function localSemanticMatch(fields) {
           
           // 上下文权重加成
           if (contextSection && fieldDef.key.startsWith(contextSection + "[].") {
-            sim += 0.15; // 上下文匹配加分
+            sim += 0.2; // 上下文匹配加分（提高到0.2）
           }
           
-          // 阈值：相似度 > 0.6 才算匹配
-          if (sim > 0.6 && sim > bestScore) {
+          // 阈值：相似度 > 0.5 才算匹配（从0.6降到0.5，提高召回率）
+          if (sim > 0.5 && sim > bestScore) {
             bestScore = sim;
             bestMatch = fieldDef.key;
           }
@@ -319,13 +356,24 @@ function localSemanticMatch(fields) {
         else if (label.includes(fieldDef.name) || fieldDef.name.includes(label)) score = 800 + label.length;
         // 别名匹配
         else if (fieldDef.aliases.some(alias => label.includes(alias))) score = 700;
+        // 模糊相似度匹配
+        else {
+          // 简单的字符重叠率计算
+          let overlap = 0;
+          for (const ch of label) {
+            if (fieldDef.name.includes(ch)) overlap++;
+          }
+          const ratio = overlap / Math.max(label.length, fieldDef.name.length);
+          if (ratio > 0.5) score = Math.round(ratio * 500);
+        }
         
         // 上下文权重
         if (contextSection && fieldDef.key.startsWith(contextSection + "[].") {
           score += 300;
         }
         
-        if (score > bestScore) {
+        // 阈值：规则匹配需要 > 400 分
+        if (score > 400 && score > bestScore) {
           bestScore = score;
           bestMatch = fieldDef.key;
         }
