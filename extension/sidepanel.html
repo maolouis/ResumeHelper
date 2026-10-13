@@ -28,6 +28,14 @@
           <input id="overwriteToggle" type="checkbox">
           <span>覆盖页面中已有内容</span>
         </label>
+        <details class="advanced-settings">
+          <summary>高级设置（AI语义增强）</summary>
+          <div class="settings-row">
+            <label for="apiKeyInput">豆包API Key:</label>
+            <input id="apiKeyInput" type="password" placeholder="输入API Key启用AI语义分析">
+          </div>
+          <button id="aiEnhanceButton" class="secondary" type="button">AI语义分析增强</button>
+        </details>
       </section>
 
       <section id="pageSection" class="section" hidden>

@@ -23,7 +23,9 @@ const elements = {
   documentSelect: document.querySelector("#documentSelect"),
   uploadButton: document.querySelector("#uploadButton"),
   messageBox: document.querySelector("#messageBox"),
-  refreshButton: document.querySelector("#refreshButton")
+  refreshButton: document.querySelector("#refreshButton"),
+  apiKeyInput: document.querySelector("#apiKeyInput"),
+  aiEnhanceButton: document.querySelector("#aiEnhanceButton")
 };
 
 let appState = null;
@@ -60,6 +62,98 @@ function request(message) {
       resolve(response.result);
     });
   });
+}
+
+// 豆包API语义分析
+async function callDoubaoAI(fields, apiKey) {
+  if (!apiKey) {
+    throw new Error("请先配置豆包API Key");
+  }
+  
+  // 构建提示词
+  const fieldList = fields.map((f, i) => `${i + 1}. 标签: "${f.label}", 上下文: "${f.context || ''}"`).join("\n");
+  
+  const systemPrompt = `你是一个简历字段匹配专家。请根据字段标签和上下文，判断每个字段应该匹配哪个简历数据字段。
+
+可匹配的字段列表：
+- basic.full_name: 姓名
+- basic.gender: 性别
+- basic.phone: 手机号码
+- basic.email: 电子邮箱
+- basic.id_number: 身份证号
+- basic.id_type: 证件类型
+- basic.nationality_country: 国籍
+- basic.ethnicity: 民族
+- basic.political_status: 政治面貌
+- basic.birthday: 出生日期
+- basic.address: 现居地
+- education[].school: 学校名称
+- education[].degree: 学历
+- education[].major: 专业
+- education[].start_date: 入学时间
+- education[].end_date: 毕业时间
+- education[].gpa: GPA
+- work_experience[].company: 公司名称
+- work_experience[].position: 职位
+- work_experience[].start_date: 入职时间
+- work_experience[].end_date: 离职时间
+- work_experience[].description: 工作描述
+- projects[].name: 项目名称
+- projects[].role: 项目角色
+- projects[].start_date: 项目开始时间
+- projects[].end_date: 项目结束时间
+- projects[].description: 项目描述
+- certificates_awards[].name: 证书/奖项名称
+- certificates_awards[].level: 等级/级别
+- certificates_awards[].date: 获得时间
+- language_skills[].language: 语种
+- language_skills[].level: 水平
+- language_skills[].certificate: 证书
+- professional_skills[].name: 技能名称
+- professional_skills[].level: 熟练程度
+
+请以JSON格式返回，格式为：{"字段序号": "匹配的字段key"}
+例如：{"1": "basic.full_name", "2": "education[].school"}
+
+注意：
+1. 注意上下文，在"获奖经历"区块里的"名称"应该匹配 certificates_awards[].name
+2. 在"工作经历"区块里的"公司"应该匹配 work_experience[].company
+3. 如果不确定，返回空字符串`;
+
+  const userPrompt = `请分析以下字段：\n${fieldList}\n\n请返回JSON格式的匹配结果。`;
+
+  try {
+    const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "doubao-pro-4k",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API调用失败: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices[0].message.content;
+    
+    // 解析JSON
+    const result = JSON.parse(content);
+    return result;
+  } catch (error) {
+    console.error("豆包API调用失败:", error);
+    throw error;
+  }
 }
 
 function setBusy(busy) {
@@ -434,6 +528,65 @@ elements.saveMissingButton.addEventListener("click", saveMissing);
 elements.profileSelect.addEventListener("change", selectProfile);
 elements.uploadButton.addEventListener("click", upload);
 elements.refreshButton.addEventListener("click", loadState);
+elements.aiEnhanceButton.addEventListener("click", aiEnhance);
+
+// API Key 保存/加载
+elements.apiKeyInput.addEventListener("change", () => {
+  chrome.storage.local.set({ doubao_api_key: elements.apiKeyInput.value });
+});
+
+// 加载API Key
+chrome.storage.local.get("doubao_api_key").then((data) => {
+  if (data.doubao_api_key) {
+    elements.apiKeyInput.value = data.doubao_api_key;
+  }
+});
+
+// AI语义增强
+async function aiEnhance() {
+  const apiKey = elements.apiKeyInput.value.trim();
+  if (!apiKey) {
+    showMessage("请先输入豆包API Key", true);
+    return;
+  }
+  
+  try {
+    setBusy(true);
+    showMessage("正在调用AI语义分析...");
+    
+    // 先扫描页面
+    const scanResult = await request({ type: "scanForm" });
+    const fields = scanResult.fields || [];
+    
+    // 过滤出需要分析的字段
+    const fieldsToAnalyze = fields.slice(0, 20); // 最多分析20个字段
+    
+    // 调用豆包API
+    const aiResult = await callDoubaoAI(fieldsToAnalyze, apiKey);
+    
+    // 把AI结果转成mappings格式
+    const mappings = {};
+    for (const [indexStr, canonical] of Object.entries(aiResult)) {
+      const index = parseInt(indexStr) - 1;
+      if (fields[index] && canonical) {
+        const label = fields[index].label;
+        mappings[label] = canonical;
+      }
+    }
+    
+    // 保存mappings，下次扫描时使用
+    await chrome.storage.local.set({ ai_mappings: mappings });
+    
+    showMessage(`AI语义分析完成，识别了 ${Object.keys(mappings).length} 个字段映射`);
+    
+    // 重新扫描
+    await scan();
+  } catch (error) {
+    showMessage(`AI分析失败: ${error.message}`, true);
+  } finally {
+    setBusy(false);
+  }
+}
 
 loadState();
 

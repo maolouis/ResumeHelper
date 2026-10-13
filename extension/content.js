@@ -1,5 +1,5 @@
 (() => {
-  const CONTENT_VERSION = "0.4.8";
+  const CONTENT_VERSION = "0.5.0";
   if (globalThis.__resumeHelperContentLoaded === CONTENT_VERSION) {
     return;
   }
@@ -259,14 +259,17 @@
     for (let depth = 0; node && depth < 10; depth += 1, node = node.parentElement) {
       const own = contextFromText(directText(node));
       if (own) return own;
-      const headings = node.querySelectorAll(":scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > legend, :scope > [class*='title'], :scope > [class*='header']");
+      // 改进：不仅查找直接子元素的标题，也查找后代元素中的标题
+      const headings = node.querySelectorAll("h1, h2, h3, h4, h5, h6, legend, [class*='title'], [class*='header'], [class*='section-name'], [class*='block-title'], [class*='module-title']");
       for (const heading of headings) {
+        // 只考虑在控制元素上方的标题（标题应该在字段上方）
         if (heading.compareDocumentPosition(control) & Node.DOCUMENT_POSITION_FOLLOWING) {
           const matched = contextFromText(directText(heading) || heading.innerText || heading.textContent);
           if (matched) return matched;
         }
       }
     }
+    // 回退：查找页面上所有可见的标题元素，找最近的一个
     const headings = [...document.querySelectorAll(
       "h1,h2,h3,h4,legend,[class*='section-title'],[class*='section-header'],[class*='block-title'],[class*='module-title'],button,[role='button']"
     )].filter(isVisible);
@@ -373,31 +376,68 @@
     return Boolean(selected && (selected.defaultChecked || selected.hasAttribute("checked") || selected.getAttribute("data-default-checked") === "true"));
   }
 
-  function controls() {
-    // 自动展开折叠区块：点击所有"+添加"/"添加经历"/"新增"等按钮
+  function controls(profile) {
+    // 自动展开折叠区块：根据简历数据条数，智能点击"添加"按钮创建对应条目
     // 参考竞品 Resume FlashFill 的完整鼠标事件序列模拟
-    // 优化：限制展开数量，避免展开太多空区块导致完整度下降
     try {
-      let expandCount = 0;
-      const MAX_EXPAND = 8; // 最多展开8个区块，避免过度展开
+      // 统计每个区块需要多少条数据
+      const sectionCounts = {};
+      if (profile) {
+        for (const [section, rows] of Object.entries(profile)) {
+          if (Array.isArray(rows) && rows.length > 0) {
+            sectionCounts[section] = rows.length;
+          }
+        }
+      }
+      
       const addButtons = deepQueryAll("button, [role='button'], a, span, div").filter(isVisible);
+      // 匹配区块关键词，确定每个按钮属于哪个区块
+      const sectionPatterns = [
+        { section: "education", pattern: /教育|学历/ },
+        { section: "work_experience", pattern: /工作|实习/ },
+        { section: "projects", pattern: /项目/ },
+        { section: "certificates_awards", pattern: /获奖|奖励|荣誉|证书/ },
+        { section: "language_skills", pattern: /语言|外语/ },
+        { section: "professional_skills", pattern: /技能/ },
+      ];
+      
       for (const btn of addButtons) {
-        if (expandCount >= MAX_EXPAND) break;
         const text = (btn.innerText || btn.textContent || "").trim();
         // 匹配各种"添加/新增"按钮
-        if (/^(?:\+|添加|新增|增加|添加经历|添加项目|添加教育|添加工作|添加实习|添加获奖|添加语言)/.test(text) && text.length < 15) {
+        if (/^(?:\+|添加|新增|增加)/.test(text) && text.length < 20) {
+          // 找到按钮所在的区块
+          let parent = btn.parentElement;
+          let sectionKey = "";
+          for (let i = 0; i < 5 && parent; i++) {
+            const parentText = parent.innerText || "";
+            for (const sp of sectionPatterns) {
+              if (sp.pattern.test(parentText)) {
+                sectionKey = sp.section;
+                break;
+              }
+            }
+            if (sectionKey) break;
+            parent = parent.parentElement;
+          }
+          
+          // 计算需要点击的次数：简历有 N 条数据，初始有 1 条，需要点 N-1 次
+          let clickCount = 1; // 默认点1次
+          if (sectionKey && sectionCounts[sectionKey]) {
+            clickCount = Math.max(1, sectionCounts[sectionKey] - 1);
+          }
+          
           // 完整的鼠标事件序列，确保触发复杂组件的展开逻辑
-          try {
-            btn.scrollIntoView({ behavior: "instant", block: "nearest" });
-            btn.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
-            btn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
-            btn.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
-            btn.click();
-            btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-            expandCount++;
-          } catch (e) {
-            btn.click();
-            expandCount++;
+          for (let i = 0; i < clickCount; i++) {
+            try {
+              btn.scrollIntoView({ behavior: "instant", block: "nearest" });
+              btn.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+              btn.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true }));
+              btn.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
+              btn.click();
+              btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+            } catch (e) {
+              btn.click();
+            }
           }
         }
       }
@@ -604,10 +644,12 @@
   
   // 否定关键词：如果 label 包含这些词，不匹配个人基本信息字段
   const NEGATIVE_KEYWORDS = {
-    "basic.name": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /介绍人/, /家属/, /紧急联系人/, /领导/, /老师/, /主管/],
+    "basic.name": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /介绍人/, /家属/, /紧急联系人/, /领导/, /老师/, /主管/, /同事/, /HR/, /招聘方/, /上级/, /下属/, /联系人姓名/, /导师姓名/],
     "basic.gender": [],
-    "basic.phone": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/],
-    "basic.email": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/],
+    "basic.phone": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/, /家属/, /HR/, /招聘方/],
+    "basic.email": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/, /家属/, /HR/, /招聘方/],
+    "basic.id_number": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/, /家属/],
+    "basic.nationality_country": [],
   };
   
   // 上下文感知：在特定区块内的字段应该匹配对应的上下文字段
@@ -620,6 +662,37 @@
     { context: "language", keywords: [/语言能力/, /外语水平/] },
     { context: "skill", keywords: [/专业技能/, /技能特长/, /技术能力/] },
   ];
+  
+  // 检测字段所在的上下文区块
+  function detectContext(control) {
+    if (!control) return "";
+    // 向上遍历祖先元素，查找区块标题
+    let node = control.parentElement;
+    for (let depth = 0; node && depth < 8; depth += 1, node = node.parentElement) {
+      // 查找该祖先元素内的标题文本
+      const headings = node.querySelectorAll("h1, h2, h3, h4, h5, h6, [class*='title'], [class*='header'], [class*='section-name']");
+      for (const heading of headings) {
+        const text = cleanText(heading.innerText || heading.textContent);
+        if (!text || text.length > 30) continue;
+        // 匹配上下文关键词
+        for (const block of CONTEXT_BLOCK_KEYWORDS) {
+          if (block.keywords.some((pattern) => pattern.test(text))) {
+            return block.context;
+          }
+        }
+      }
+      // 也检查直接的文本内容（有些区块标题是纯文本div）
+      const directText = directText(node);
+      if (directText && directText.length < 20) {
+        for (const block of CONTEXT_BLOCK_KEYWORDS) {
+          if (block.keywords.some((pattern) => pattern.test(directText))) {
+            return block.context;
+          }
+        }
+      }
+    }
+    return "";
+  }
   
   const STRONG_FIELD_RULES = [
     // 个人基本信息 - 带否定关键词的精确匹配
@@ -720,7 +793,9 @@
           const combined = normalize(`${descriptor.contextText}${descriptor.label}`);
           if (combined.includes(alias) && alias.length >= 3) score = Math.max(score, 760 + alias.length);
         }
-        if (descriptor.context && canonical.startsWith(`${descriptor.context}[].`)) score += 120;
+        if (descriptor.context && canonical.startsWith(`${descriptor.context}[].`)) score += 200;
+        // 上下文不匹配时，大幅扣分，避免跨区块误匹配
+        if (descriptor.context && !canonical.startsWith(`${descriptor.context}[].`) && canonical.includes("[]")) score -= 150;
         if (score > best.score) best = { canonical, score };
       }
     }
@@ -1087,7 +1162,7 @@
   }
 
   async function scanForm(profile = null, mappings = null) {
-    const pageControls = controls();
+    const pageControls = controls(profile);
     const values = profile ? flattenProfile(profile) : {};
     const counters = {};
     const canonicalCounts = mappings ? countCanonicals(pageControls, mappings) : {};
