@@ -1,5 +1,5 @@
 (() => {
-  const CONTENT_VERSION = "0.4.7";
+  const CONTENT_VERSION = "0.4.8";
   if (globalThis.__resumeHelperContentLoaded === CONTENT_VERSION) {
     return;
   }
