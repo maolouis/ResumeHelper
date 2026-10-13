@@ -674,7 +674,9 @@ elements.apiKeyInput.addEventListener("change", () => {
 
 // 语义增强方式切换时显示/隐藏API Key输入框
 elements.aiMethodSelect.addEventListener("change", () => {
-  if (elements.aiMethodSelect.value === "deepseek") {
+  const method = elements.aiMethodSelect.value;
+  // 云端AI和混合模式都需要API Key
+  if (method === "deepseek" || method === "hybrid") {
     elements.apiKeyRow.hidden = false;
   } else {
     elements.apiKeyRow.hidden = true;
@@ -714,42 +716,49 @@ async function aiEnhance() {
     // 过滤出需要分析的字段
     const fieldsToAnalyze = fields.slice(0, 30); // 最多分析30个字段
     
-    let aiResult;
+    let mappings = {};
     let methodName;
     
     if (aiMethod === "deepseek") {
+      // 纯云端AI模式
       if (!apiKey) {
         showMessage("请先输入DeepSeek API Key", true);
         return;
       }
-      showMessage("正在调用DeepSeek AI语义分析...");
-      aiResult = await callDeepSeekAI(fieldsToAnalyze, apiKey);
-      methodName = "DeepSeek云端AI";
-    } else {
-      showMessage("正在运行本地语义匹配...");
-      aiResult = localSemanticMatch(fieldsToAnalyze);
-      methodName = "本地规则匹配";
-    }
-    
-    // 把AI结果转成mappings格式
-    const mappings = {};
-    for (const [indexStr, canonical] of Object.entries(aiResult)) {
-      const index = parseInt(indexStr) - 1;
-      if (fields[index] && canonical) {
-        const label = fields[index].label;
-        mappings[label] = canonical;
+      showMessage("正在调用DeepSeek云端AI...");
+      const aiResult = await callDeepSeekAI(fieldsToAnalyze, apiKey);
+      
+      for (const [indexStr, canonical] of Object.entries(aiResult)) {
+        const index = parseInt(indexStr) - 1;
+        if (fields[index] && canonical) {
+          mappings[fields[index].label] = canonical;
+        }
       }
+      methodName = "DeepSeek云端AI";
+      
+    } else {
+      // 纯本地模式
+      showMessage("正在运行Ternlight本地语义模型...");
+      const localResult = localSemanticMatch(fieldsToAnalyze);
+      
+      for (const [indexStr, canonical] of Object.entries(localResult)) {
+        const index = parseInt(indexStr) - 1;
+        if (fields[index] && canonical) {
+          mappings[fields[index].label] = canonical;
+        }
+      }
+      methodName = "Ternlight本地模型";
     }
     
     // 保存mappings，下次扫描时使用
     await chrome.storage.local.set({ ai_mappings: mappings });
     
-    showMessage(`${methodName}完成，识别了 ${Object.keys(mappings).length} 个字段映射`);
+    showMessage(`${methodName}完成！匹配了 ${Object.keys(mappings).length} 个字段`);
     
     // 重新扫描
     await scan();
   } catch (error) {
-    showMessage(`AI分析失败: ${error.message}`, true);
+    showMessage(`语义增强失败: ${error.message}`, true);
   } finally {
     setBusy(false);
   }

@@ -33,9 +33,13 @@
           <div class="settings-row">
             <label for="aiMethodSelect">语义增强方式:</label>
             <select id="aiMethodSelect">
-              <option value="local">Ternlight本地语义模型（推荐）</option>
-              <option value="deepseek">DeepSeek云端AI</option>
+              <option value="local">🟢 Ternlight本地模型（推荐·离线）</option>
+              <option value="deepseek">🔵 DeepSeek云端AI（最精准）</option>
             </select>
+          </div>
+          <div class="settings-desc">
+            <p><strong>本地模型</strong>：7.5MB，离线可用，2.5ms/次，覆盖80%常见字段</p>
+            <p><strong>云端AI</strong>：DeepSeek大模型，理解复杂语义，准确率最高</p>
           </div>
           <div class="settings-row" id="apiKeyRow" hidden>
             <label for="apiKeyInput">DeepSeek API Key:</label>
