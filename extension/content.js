@@ -376,9 +376,13 @@
   function controls() {
     // 自动展开折叠区块：点击所有"+添加"/"添加经历"/"新增"等按钮
     // 参考竞品 Resume FlashFill 的完整鼠标事件序列模拟
+    // 优化：限制展开数量，避免展开太多空区块导致完整度下降
     try {
+      let expandCount = 0;
+      const MAX_EXPAND = 8; // 最多展开8个区块，避免过度展开
       const addButtons = deepQueryAll("button, [role='button'], a, span, div").filter(isVisible);
       for (const btn of addButtons) {
+        if (expandCount >= MAX_EXPAND) break;
         const text = (btn.innerText || btn.textContent || "").trim();
         // 匹配各种"添加/新增"按钮
         if (/^(?:\+|添加|新增|增加|添加经历|添加项目|添加教育|添加工作|添加实习|添加获奖|添加语言)/.test(text) && text.length < 15) {
@@ -390,8 +394,10 @@
             btn.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true }));
             btn.click();
             btn.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+            expandCount++;
           } catch (e) {
             btn.click();
+            expandCount++;
           }
         }
       }
