@@ -1,5 +1,5 @@
 (() => {
-  const CONTENT_VERSION = "0.4.6";
+  const CONTENT_VERSION = "0.4.7";
   if (globalThis.__resumeHelperContentLoaded === CONTENT_VERSION) {
     return;
   }
@@ -10,9 +10,9 @@
 
   // 通用组件识别：不枚举组件库名，用命名约定通配符匹配所有下拉/日期/单选组件
   // 所有组件库的下拉容器 class 都以 `-select` 结尾（ant-select, el-select, atsx-select, arco-select, semi-select, ivu-select...）
-  // 排除内部子元素（selection/item/arrow/search/menu/dropdown 等）
-  const SELECT_WRAPPERS = "[class*='-select']:not([class*='-select-selection']):not([class*='-select-item']):not([class*='-select-arrow']):not([class*='-select-input']):not([class*='-select-search']):not([class*='-select-menu']):not([class*='-select-dropdown']):not([class*='-select-tags']):not([class*='-select-selection-item']), [role='combobox'], [aria-haspopup='listbox'], [aria-haspopup='menu']";
-  const DATE_WRAPPERS = "[class*='-picker']:not([class*='-picker-panel']):not([class*='-picker-dropdown']):not([class*='-picker-header']):not([class*='-picker-body']), [class*='date-editor'], [class*='calendar-picker']";
+  // 不在 CSS 选择器中排除内部子元素（不同组件库命名不同），改由最外层容器去重逻辑处理
+  const SELECT_WRAPPERS = "[class*='-select'], [role='combobox'], [aria-haspopup='listbox'], [aria-haspopup='menu']";
+  const DATE_WRAPPERS = "[class*='-picker'], [class*='date-editor'], [class*='calendar-picker']";
   const RADIO_GROUPS = "[class*='-radio-group'], [class*='radio-group'], [role='radiogroup']";
 
   const uploads = new Map();
@@ -201,7 +201,7 @@
     }
     if (!pieces.some((piece) => cleanText(piece))) {
       let parent = control.parentElement;
-      for (let depth = 0; parent && depth < 3; depth += 1, parent = parent.parentElement) {
+      for (let depth = 0; parent && depth < 6; depth += 1, parent = parent.parentElement) {
         const label = parent.querySelector(
           ":scope > label, :scope > [class*='label'], :scope > [class*='title'], :scope > [class*='field-name'], :scope > [class*='item-name'], :scope > [class*='form-label']"
         );
@@ -212,12 +212,27 @@
     // 从控件的前一个兄弟元素提取 label（很多自研表单用兄弟 div 做标签）
     if (!pieces.some((piece) => cleanText(piece))) {
       let sibling = control;
-      for (let depth = 0; depth < 3 && sibling; depth += 1, sibling = sibling.parentElement) {
+      for (let depth = 0; depth < 6 && sibling; depth += 1, sibling = sibling.parentElement) {
         const prev = sibling.previousElementSibling;
         if (prev && isVisible(prev)) {
           const text = cleanText(prev.innerText || prev.textContent);
           if (text && text.length <= 40) { pieces.push(text); break; }
         }
+      }
+    }
+    // 向上遍历祖先，在每个祖先中查找 label 元素（覆盖 atsx 等 label 在兄弟节点的组件库）
+    if (!pieces.some((piece) => cleanText(piece))) {
+      let ancestor = control.parentElement;
+      for (let depth = 0; ancestor && depth < 6; depth += 1, ancestor = ancestor.parentElement) {
+        const labels = ancestor.querySelectorAll("[class*='form-item-label'], [class*='field-label'], label");
+        for (const lbl of labels) {
+          const text = cleanText(lbl.innerText || lbl.textContent);
+          if (text && text.length <= 40 && !lbl.querySelector?.("input, select, [role='combobox']")) {
+            pieces.push(text);
+            break;
+          }
+        }
+        if (pieces.some((p) => cleanText(p))) break;
       }
     }
     const metadataNodes = [control, control.querySelector?.("input:not([type='hidden']), textarea, select")].filter(Boolean);
@@ -368,7 +383,7 @@
       const outer = rawContainers.find((o) => o !== c && o.contains(c));
       if (!outer) containerSet.add(c);
     }
-    return all
+    const rawResults = all
       .map((element) => {
         if (element.matches(RADIO_GROUPS)) return element.closest(RADIO_GROUPS) || element;
         // 如果元素本身或其祖先在最外层容器集合中，返回最外层容器
@@ -382,8 +397,9 @@
         if (element.disabled || element.getAttribute("aria-disabled") === "true"
           || element.matches("[class*='-select-disabled'], [class*='-picker-disabled']")
           || element.querySelector("input:disabled")) return false;
-        // 排除下拉浮层/弹出层/选项面板（所有组件库的 dropdown class 都包含 -dropdown 或 -popup 或 -menu）
+        // 排除下拉浮层/弹出层/选项面板/选项元素
         if (element.closest("[class*='-dropdown'], [class*='-popup'], [class*='-overlay'], [class*='-option-list'], [class*='-menu'], [class*='cascader-menus'], [class*='picker-dropdown']")) return false;
+        if (element.matches("[class*='-select-item'], [class*='-option'], [class*='select-option']")) return false;
         if (!element.readOnly) return true;
         return element.getAttribute("role") === "combobox"
           || /select|picker|dropdown/i.test(String(element.className || ""))
@@ -409,9 +425,11 @@
           required: Boolean(control.required || control.getAttribute("aria-required") === "true" || /[*＊]/.test(getContainer(control)?.innerText || "")),
           value: currentValue(control)
         };
-      })
+      });
+    const descriptors = rawResults
       .filter((descriptor) => descriptor.label)
       .filter((descriptor) => !isNavigationSearch(descriptor.control, descriptor.labelCandidates));
+    return descriptors;
   }
 
   function flattenProfile(profile) {
