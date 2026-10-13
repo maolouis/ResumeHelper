@@ -33,8 +33,8 @@
           <div class="settings-row">
             <label for="aiMethodSelect">语义增强方式:</label>
             <select id="aiMethodSelect">
-              <option value="local">本地规则匹配（无需API）</option>
-              <option value="deepseek">DeepSeek云端AI（更精准）</option>
+              <option value="local">Ternlight本地语义模型（推荐）</option>
+              <option value="deepseek">DeepSeek云端AI</option>
             </select>
           </div>
           <div class="settings-row" id="apiKeyRow" hidden>
@@ -94,6 +94,24 @@
       <button id="refreshButton" class="text-button" type="button">刷新资料</button>
     </footer>
     <script src="sidepanel.js"></script>
+    <script type="module">
+      // 引入 Ternlight 语义模型
+      import { embed, cosineSim, similar } from './ternlight/tern_engine.js';
+      
+      // 挂到 window 上供 sidepanel.js 使用
+      window.Ternlight = { embed, cosineSim, similar };
+      
+      // 预加载模型
+      console.log("Ternlight 语义模型加载中...");
+      try {
+        // 触发一次 embed 来初始化 WASM
+        embed("初始化");
+        console.log("Ternlight 语义模型加载完成");
+        window.dispatchEvent(new CustomEvent('ternlight-ready'));
+      } catch (e) {
+        console.error("Ternlight 加载失败:", e);
+      }
+    </script>
   </body>
 </html>
 

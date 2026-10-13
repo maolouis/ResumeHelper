@@ -7,5 +7,8 @@
   },
   "devDependencies": {
     "playwright": "1.64.0"
+  },
+  "dependencies": {
+    "@ternlight/mini": "^0.1.1"
   }
 }

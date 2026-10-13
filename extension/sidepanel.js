@@ -158,109 +158,134 @@ async function callDeepSeekAI(fields, apiKey) {
   }
 }
 
-// 本地轻量级语义匹配（本地小模型方案）
+// 本地语义匹配（Ternlight真语义 + 规则兜底）
 function localSemanticMatch(fields) {
-  // 本地同义词库 + 上下文规则增强
-  const SYNONYM_MAP = {
-    // 个人基本信息
-    "姓名": ["basic.full_name", "名字", "真实姓名", "应聘者姓名", "求职者姓名"],
-    "性别": ["basic.gender", "男/女"],
-    "手机": ["basic.phone", "手机号码", "手机号", "联系电话", "联系方式"],
-    "邮箱": ["basic.email", "电子邮箱", "Email", "E-mail"],
-    "身份证": ["basic.id_number", "身份证号", "证件号码"],
-    "证件类型": ["basic.id_type"],
-    "国籍": ["basic.nationality_country"],
-    "民族": ["basic.ethnicity"],
-    "政治面貌": ["basic.political_status"],
-    "生日": ["basic.birthday", "出生日期"],
-    "地址": ["basic.address", "现居地", "居住地"],
-    
-    // 教育经历
-    "学校": ["education[].school", "院校", "毕业院校", "学校名称"],
-    "学历": ["education[].degree", "学位", "最高学历"],
-    "专业": ["education[].major", "所学专业"],
-    "入学": ["education[].start_date", "入学时间", "开始时间"],
-    "毕业": ["education[].end_date", "毕业时间", "结束时间"],
-    "GPA": ["education[].gpa", "平均成绩", "绩点"],
-    
-    // 工作经历
-    "公司": ["work_experience[].company", "企业名称", "单位名称", "公司名称"],
-    "职位": ["work_experience[].position", "岗位", "职务"],
-    "入职": ["work_experience[].start_date", "入职时间", "开始时间"],
-    "离职": ["work_experience[].end_date", "离职时间", "结束时间"],
-    "工作描述": ["work_experience[].description", "工作内容", "工作职责"],
-    
-    // 项目经历
-    "项目名称": ["projects[].name", "项目名"],
-    "项目角色": ["projects[].role", "角色", "担任角色"],
-    "项目描述": ["projects[].description", "项目内容", "项目职责"],
-    
-    // 证书与奖项
-    "证书名称": ["certificates_awards[].name", "证书", "奖项", "获奖名称"],
-    "奖项等级": ["certificates_awards[].level", "等级", "级别", "奖项级别"],
-    "获奖时间": ["certificates_awards[].date", "获得时间", "颁发时间"],
-    
-    // 语言能力
-    "语种": ["language_skills[].language", "语言", "外语"],
-    "语言水平": ["language_skills[].level", "水平", "程度"],
-    "语言证书": ["language_skills[].certificate", "证书", "英语证书"],
-    
-    // 专业技能
-    "技能名称": ["professional_skills[].name", "技能", "技术"],
-    "技能水平": ["professional_skills[].level", "熟练程度", "水平"],
-  };
+  // 标准字段定义
+  const CANONICAL_FIELDS = [
+    { key: "basic.full_name", name: "姓名", aliases: ["名字", "真实姓名", "应聘者姓名", "求职者姓名"] },
+    { key: "basic.gender", name: "性别", aliases: ["男/女"] },
+    { key: "basic.phone", name: "手机号码", aliases: ["手机号", "联系电话", "联系方式", "手机"] },
+    { key: "basic.email", name: "电子邮箱", aliases: ["邮箱", "Email", "E-mail", "电子信箱"] },
+    { key: "basic.id_number", name: "身份证号", aliases: ["身份证号码", "证件号码", "居民身份证"] },
+    { key: "basic.id_type", name: "证件类型", aliases: ["证件种类"] },
+    { key: "basic.nationality_country", name: "国籍", aliases: ["国家"] },
+    { key: "basic.ethnicity", name: "民族", aliases: ["族群"] },
+    { key: "basic.political_status", name: "政治面貌", aliases: ["政治情况"] },
+    { key: "basic.birthday", name: "出生日期", aliases: ["生日", "出生年月"] },
+    { key: "basic.address", name: "现居地", aliases: ["居住地", "所在地", "籍贯"] },
+    { key: "education[].school", name: "学校名称", aliases: ["院校", "毕业院校", "毕业学校", "学校"] },
+    { key: "education[].degree", name: "学历", aliases: ["学位", "最高学历", "学历层次"] },
+    { key: "education[].major", name: "专业", aliases: ["所学专业", "专业名称"] },
+    { key: "education[].start_date", name: "入学时间", aliases: ["开始时间", "入学年月"] },
+    { key: "education[].end_date", name: "毕业时间", aliases: ["结束时间", "毕业年月", "预计毕业"] },
+    { key: "education[].gpa", name: "GPA", aliases: ["平均成绩", "绩点", "成绩排名"] },
+    { key: "work_experience[].company", name: "公司名称", aliases: ["企业名称", "单位名称", "公司", "企业", "单位"] },
+    { key: "work_experience[].position", name: "职位", aliases: ["岗位", "职务", "职位名称"] },
+    { key: "work_experience[].start_date", name: "入职时间", aliases: ["开始时间", "入职年月"] },
+    { key: "work_experience[].end_date", name: "离职时间", aliases: ["结束时间", "离职年月"] },
+    { key: "work_experience[].description", name: "工作描述", aliases: ["工作内容", "工作职责", "工作业绩"] },
+    { key: "projects[].name", name: "项目名称", aliases: ["项目名", "项目标题"] },
+    { key: "projects[].role", name: "项目角色", aliases: ["角色", "担任角色", "项目职务"] },
+    { key: "projects[].description", name: "项目描述", aliases: ["项目内容", "项目职责", "项目业绩"] },
+    { key: "certificates_awards[].name", name: "证书名称", aliases: ["奖项名称", "证书", "奖项", "获奖名称", "荣誉名称"] },
+    { key: "certificates_awards[].level", name: "证书等级", aliases: ["奖项等级", "等级", "级别", "奖项级别", "获奖级别"] },
+    { key: "certificates_awards[].date", name: "获得时间", aliases: ["获奖时间", "颁发时间", "证书时间"] },
+    { key: "language_skills[].language", name: "语种", aliases: ["语言", "外语", "外语种类"] },
+    { key: "language_skills[].level", name: "语言水平", aliases: ["水平", "程度", "熟练程度"] },
+    { key: "language_skills[].certificate", name: "语言证书", aliases: ["证书", "英语证书", "语言成绩"] },
+    { key: "professional_skills[].name", name: "技能名称", aliases: ["技能", "技术", "专业技能"] },
+    { key: "professional_skills[].level", name: "技能水平", aliases: ["熟练程度", "水平", "掌握程度"] },
+  ];
   
-  // 上下文权重：在特定区块里的字段优先匹配对应section
-  const CONTEXT_WEIGHT = {
-    "教育经历": "education",
-    "教育背景": "education",
-    "工作经历": "work_experience",
-    "实习经历": "work_experience",
-    "项目经历": "projects",
-    "获奖经历": "certificates_awards",
-    "荣誉奖项": "certificates_awards",
-    "语言能力": "language_skills",
-    "外语水平": "language_skills",
-    "专业技能": "professional_skills",
-  };
+  // 上下文区块关键词
+  const CONTEXT_BLOCKS = [
+    { keywords: ["教育经历", "教育背景", "学历信息"], section: "education" },
+    { keywords: ["工作经历", "实习经历", "职业经历"], section: "work_experience" },
+    { keywords: ["项目经历", "项目经验"], section: "projects" },
+    { keywords: ["获奖经历", "荣誉奖项", "证书"], section: "certificates_awards" },
+    { keywords: ["语言能力", "外语水平", "英语"], section: "language_skills" },
+    { keywords: ["专业技能", "技能特长"], section: "professional_skills" },
+  ];
   
   const result = {};
+  const hasTernlight = typeof window.Ternlight !== 'undefined';
   
   fields.forEach((field, index) => {
-    const label = field.label || "";
-    const context = field.context || "";
+    const label = (field.label || "").trim();
+    const context = (field.context || "").trim();
+    
+    if (!label) return;
     
     let bestMatch = "";
     let bestScore = 0;
     
-    // 1. 先看上下文，如果在特定区块里，优先匹配该区块的字段
+    // 检测上下文区块
     let contextSection = "";
-    for (const [ctx, section] of Object.entries(CONTEXT_WEIGHT)) {
-      if (context.includes(ctx) || context.includes(ctx)) {
-        contextSection = section;
+    for (const block of CONTEXT_BLOCKS) {
+      if (block.keywords.some(kw => context.includes(kw))) {
+        contextSection = block.section;
         break;
       }
     }
     
-    // 2. 在同义词库里找匹配
-    for (const [key, aliases] of Object.entries(SYNONYM_MAP)) {
-      if (label.includes(key) || key.includes(label)) {
-        const canonical = aliases[0];
-        let score = 500 + key.length;
+    // 方法1：使用 Ternlight 真语义匹配（准确率最高）
+    if (hasTernlight) {
+      try {
+        const queryEmbedding = window.Ternlight.embed(label);
         
-        // 如果上下文匹配，加分
-        if (contextSection && canonical.startsWith(contextSection + "[].") {
+        for (const fieldDef of CANONICAL_FIELDS) {
+          // 计算与标准字段名的相似度
+          const canonicalEmbedding = window.Ternlight.embed(fieldDef.name);
+          let sim = window.Ternlight.cosineSim(queryEmbedding, canonicalEmbedding);
+          
+          // 加上别名的相似度（取最大值）
+          for (const alias of fieldDef.aliases) {
+            const aliasEmbedding = window.Ternlight.embed(alias);
+            const aliasSim = window.Ternlight.cosineSim(queryEmbedding, aliasEmbedding);
+            if (aliasSim > sim) sim = aliasSim;
+          }
+          
+          // 上下文权重加成
+          if (contextSection && fieldDef.key.startsWith(contextSection + "[].") {
+            sim += 0.15; // 上下文匹配加分
+          }
+          
+          // 阈值：相似度 > 0.6 才算匹配
+          if (sim > 0.6 && sim > bestScore) {
+            bestScore = sim;
+            bestMatch = fieldDef.key;
+          }
+        }
+      } catch (e) {
+        console.warn("Ternlight 匹配失败，使用规则兜底:", e);
+      }
+    }
+    
+    // 方法2：规则兜底（如果 Ternlight 不可用）
+    if (!bestMatch) {
+      for (const fieldDef of CANONICAL_FIELDS) {
+        let score = 0;
+        
+        // 精确匹配
+        if (label === fieldDef.name) score = 1000;
+        // 包含匹配
+        else if (label.includes(fieldDef.name) || fieldDef.name.includes(label)) score = 800 + label.length;
+        // 别名匹配
+        else if (fieldDef.aliases.some(alias => label.includes(alias))) score = 700;
+        
+        // 上下文权重
+        if (contextSection && fieldDef.key.startsWith(contextSection + "[].") {
           score += 300;
         }
         
         if (score > bestScore) {
           bestScore = score;
-          bestMatch = canonical;
+          bestMatch = fieldDef.key;
         }
       }
     }
     
-    if (bestMatch && bestScore >= 500) {
+    if (bestMatch && bestScore >= 600) {
       result[index + 1] = bestMatch;
     }
   });
