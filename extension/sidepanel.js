@@ -25,7 +25,9 @@ const elements = {
   messageBox: document.querySelector("#messageBox"),
   refreshButton: document.querySelector("#refreshButton"),
   apiKeyInput: document.querySelector("#apiKeyInput"),
-  aiEnhanceButton: document.querySelector("#aiEnhanceButton")
+  aiEnhanceButton: document.querySelector("#aiEnhanceButton"),
+  aiMethodSelect: document.querySelector("#aiMethodSelect"),
+  apiKeyRow: document.querySelector("#apiKeyRow")
 };
 
 let appState = null;
@@ -64,10 +66,10 @@ function request(message) {
   });
 }
 
-// 豆包API语义分析
-async function callDoubaoAI(fields, apiKey) {
+// DeepSeek API语义分析
+async function callDeepSeekAI(fields, apiKey) {
   if (!apiKey) {
-    throw new Error("请先配置豆包API Key");
+    throw new Error("请先配置API Key");
   }
   
   // 构建提示词
@@ -123,14 +125,14 @@ async function callDoubaoAI(fields, apiKey) {
   const userPrompt = `请分析以下字段：\n${fieldList}\n\n请返回JSON格式的匹配结果。`;
 
   try {
-    const response = await fetch("https://ark.cn-beijing.volces.com/api/v3/chat/completions", {
+    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "doubao-pro-4k",
+        model: "deepseek-chat",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -151,9 +153,119 @@ async function callDoubaoAI(fields, apiKey) {
     const result = JSON.parse(content);
     return result;
   } catch (error) {
-    console.error("豆包API调用失败:", error);
+    console.error("DeepSeek API调用失败:", error);
     throw error;
   }
+}
+
+// 本地轻量级语义匹配（本地小模型方案）
+function localSemanticMatch(fields) {
+  // 本地同义词库 + 上下文规则增强
+  const SYNONYM_MAP = {
+    // 个人基本信息
+    "姓名": ["basic.full_name", "名字", "真实姓名", "应聘者姓名", "求职者姓名"],
+    "性别": ["basic.gender", "男/女"],
+    "手机": ["basic.phone", "手机号码", "手机号", "联系电话", "联系方式"],
+    "邮箱": ["basic.email", "电子邮箱", "Email", "E-mail"],
+    "身份证": ["basic.id_number", "身份证号", "证件号码"],
+    "证件类型": ["basic.id_type"],
+    "国籍": ["basic.nationality_country"],
+    "民族": ["basic.ethnicity"],
+    "政治面貌": ["basic.political_status"],
+    "生日": ["basic.birthday", "出生日期"],
+    "地址": ["basic.address", "现居地", "居住地"],
+    
+    // 教育经历
+    "学校": ["education[].school", "院校", "毕业院校", "学校名称"],
+    "学历": ["education[].degree", "学位", "最高学历"],
+    "专业": ["education[].major", "所学专业"],
+    "入学": ["education[].start_date", "入学时间", "开始时间"],
+    "毕业": ["education[].end_date", "毕业时间", "结束时间"],
+    "GPA": ["education[].gpa", "平均成绩", "绩点"],
+    
+    // 工作经历
+    "公司": ["work_experience[].company", "企业名称", "单位名称", "公司名称"],
+    "职位": ["work_experience[].position", "岗位", "职务"],
+    "入职": ["work_experience[].start_date", "入职时间", "开始时间"],
+    "离职": ["work_experience[].end_date", "离职时间", "结束时间"],
+    "工作描述": ["work_experience[].description", "工作内容", "工作职责"],
+    
+    // 项目经历
+    "项目名称": ["projects[].name", "项目名"],
+    "项目角色": ["projects[].role", "角色", "担任角色"],
+    "项目描述": ["projects[].description", "项目内容", "项目职责"],
+    
+    // 证书与奖项
+    "证书名称": ["certificates_awards[].name", "证书", "奖项", "获奖名称"],
+    "奖项等级": ["certificates_awards[].level", "等级", "级别", "奖项级别"],
+    "获奖时间": ["certificates_awards[].date", "获得时间", "颁发时间"],
+    
+    // 语言能力
+    "语种": ["language_skills[].language", "语言", "外语"],
+    "语言水平": ["language_skills[].level", "水平", "程度"],
+    "语言证书": ["language_skills[].certificate", "证书", "英语证书"],
+    
+    // 专业技能
+    "技能名称": ["professional_skills[].name", "技能", "技术"],
+    "技能水平": ["professional_skills[].level", "熟练程度", "水平"],
+  };
+  
+  // 上下文权重：在特定区块里的字段优先匹配对应section
+  const CONTEXT_WEIGHT = {
+    "教育经历": "education",
+    "教育背景": "education",
+    "工作经历": "work_experience",
+    "实习经历": "work_experience",
+    "项目经历": "projects",
+    "获奖经历": "certificates_awards",
+    "荣誉奖项": "certificates_awards",
+    "语言能力": "language_skills",
+    "外语水平": "language_skills",
+    "专业技能": "professional_skills",
+  };
+  
+  const result = {};
+  
+  fields.forEach((field, index) => {
+    const label = field.label || "";
+    const context = field.context || "";
+    
+    let bestMatch = "";
+    let bestScore = 0;
+    
+    // 1. 先看上下文，如果在特定区块里，优先匹配该区块的字段
+    let contextSection = "";
+    for (const [ctx, section] of Object.entries(CONTEXT_WEIGHT)) {
+      if (context.includes(ctx) || context.includes(ctx)) {
+        contextSection = section;
+        break;
+      }
+    }
+    
+    // 2. 在同义词库里找匹配
+    for (const [key, aliases] of Object.entries(SYNONYM_MAP)) {
+      if (label.includes(key) || key.includes(label)) {
+        const canonical = aliases[0];
+        let score = 500 + key.length;
+        
+        // 如果上下文匹配，加分
+        if (contextSection && canonical.startsWith(contextSection + "[].") {
+          score += 300;
+        }
+        
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = canonical;
+        }
+      }
+    }
+    
+    if (bestMatch && bestScore >= 500) {
+      result[index + 1] = bestMatch;
+    }
+  });
+  
+  return result;
 }
 
 function setBusy(busy) {
@@ -532,37 +644,67 @@ elements.aiEnhanceButton.addEventListener("click", aiEnhance);
 
 // API Key 保存/加载
 elements.apiKeyInput.addEventListener("change", () => {
-  chrome.storage.local.set({ doubao_api_key: elements.apiKeyInput.value });
+  chrome.storage.local.set({ deepseek_api_key: elements.apiKeyInput.value });
 });
 
-// 加载API Key
-chrome.storage.local.get("doubao_api_key").then((data) => {
-  if (data.doubao_api_key) {
-    elements.apiKeyInput.value = data.doubao_api_key;
+// 语义增强方式切换时显示/隐藏API Key输入框
+elements.aiMethodSelect.addEventListener("change", () => {
+  if (elements.aiMethodSelect.value === "deepseek") {
+    elements.apiKeyRow.hidden = false;
+  } else {
+    elements.apiKeyRow.hidden = true;
   }
+});
+
+// 加载API Key和设置
+chrome.storage.local.get(["deepseek_api_key", "ai_method"]).then((data) => {
+  if (data.deepseek_api_key) {
+    elements.apiKeyInput.value = data.deepseek_api_key;
+  }
+  if (data.ai_method) {
+    elements.aiMethodSelect.value = data.ai_method;
+    if (data.ai_method === "deepseek") {
+      elements.apiKeyRow.hidden = false;
+    }
+  }
+});
+
+// 保存选择的方式
+elements.aiMethodSelect.addEventListener("change", () => {
+  chrome.storage.local.set({ ai_method: elements.aiMethodSelect.value });
 });
 
 // AI语义增强
 async function aiEnhance() {
   const apiKey = elements.apiKeyInput.value.trim();
-  if (!apiKey) {
-    showMessage("请先输入豆包API Key", true);
-    return;
-  }
+  const aiMethod = elements.aiMethodSelect ? elements.aiMethodSelect.value : "local";
   
   try {
     setBusy(true);
-    showMessage("正在调用AI语义分析...");
     
     // 先扫描页面
     const scanResult = await request({ type: "scanForm" });
     const fields = scanResult.fields || [];
     
     // 过滤出需要分析的字段
-    const fieldsToAnalyze = fields.slice(0, 20); // 最多分析20个字段
+    const fieldsToAnalyze = fields.slice(0, 30); // 最多分析30个字段
     
-    // 调用豆包API
-    const aiResult = await callDoubaoAI(fieldsToAnalyze, apiKey);
+    let aiResult;
+    let methodName;
+    
+    if (aiMethod === "deepseek") {
+      if (!apiKey) {
+        showMessage("请先输入DeepSeek API Key", true);
+        return;
+      }
+      showMessage("正在调用DeepSeek AI语义分析...");
+      aiResult = await callDeepSeekAI(fieldsToAnalyze, apiKey);
+      methodName = "DeepSeek云端AI";
+    } else {
+      showMessage("正在运行本地语义匹配...");
+      aiResult = localSemanticMatch(fieldsToAnalyze);
+      methodName = "本地规则匹配";
+    }
     
     // 把AI结果转成mappings格式
     const mappings = {};
@@ -577,7 +719,7 @@ async function aiEnhance() {
     // 保存mappings，下次扫描时使用
     await chrome.storage.local.set({ ai_mappings: mappings });
     
-    showMessage(`AI语义分析完成，识别了 ${Object.keys(mappings).length} 个字段映射`);
+    showMessage(`${methodName}完成，识别了 ${Object.keys(mappings).length} 个字段映射`);
     
     // 重新扫描
     await scan();

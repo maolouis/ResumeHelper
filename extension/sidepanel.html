@@ -29,12 +29,19 @@
           <span>覆盖页面中已有内容</span>
         </label>
         <details class="advanced-settings">
-          <summary>高级设置（AI语义增强）</summary>
+          <summary>高级设置（语义增强）</summary>
           <div class="settings-row">
-            <label for="apiKeyInput">豆包API Key:</label>
-            <input id="apiKeyInput" type="password" placeholder="输入API Key启用AI语义分析">
+            <label for="aiMethodSelect">语义增强方式:</label>
+            <select id="aiMethodSelect">
+              <option value="local">本地规则匹配（无需API）</option>
+              <option value="deepseek">DeepSeek云端AI（更精准）</option>
+            </select>
           </div>
-          <button id="aiEnhanceButton" class="secondary" type="button">AI语义分析增强</button>
+          <div class="settings-row" id="apiKeyRow" hidden>
+            <label for="apiKeyInput">DeepSeek API Key:</label>
+            <input id="apiKeyInput" type="password" placeholder="输入DeepSeek API Key">
+          </div>
+          <button id="aiEnhanceButton" class="secondary" type="button">运行语义增强</button>
         </details>
       </section>
 
