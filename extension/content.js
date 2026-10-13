@@ -595,18 +595,52 @@
   }
 
   const MIN_CLASSIFIER_CONFIDENCE = 0.7;
+  
+  // 否定关键词：如果 label 包含这些词，不匹配个人基本信息字段
+  const NEGATIVE_KEYWORDS = {
+    "basic.name": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /介绍人/, /家属/, /紧急联系人/, /领导/, /老师/, /主管/],
+    "basic.gender": [],
+    "basic.phone": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/],
+    "basic.email": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/],
+  };
+  
+  // 上下文感知：在特定区块内的字段应该匹配对应的上下文字段
+  const CONTEXT_BLOCK_KEYWORDS = [
+    { context: "education", keywords: [/教育经历/, /教育背景/, /学历信息/, /学业信息/] },
+    { context: "internship", keywords: [/实习经历/, /实习信息/, /实习单位/] },
+    { context: "work", keywords: [/工作经历/, /工作经验/, /职业经历/] },
+    { context: "project", keywords: [/项目经历/, /项目经验/, /科研项目/] },
+    { context: "reward", keywords: [/获奖经历/, /荣誉奖项/, /奖励情况/] },
+    { context: "language", keywords: [/语言能力/, /外语水平/] },
+    { context: "skill", keywords: [/专业技能/, /技能特长/, /技术能力/] },
+  ];
+  
   const STRONG_FIELD_RULES = [
+    // 个人基本信息 - 带否定关键词的精确匹配
+    [/^(?:姓名|真实姓名|名字|应聘者姓名|求职者姓名)$/i, "basic.full_name", { negative: NEGATIVE_KEYWORDS["basic.name"] }],
+    [/^(?:性别|gender|sex)$/i, "basic.gender"],
+    [/^(?:手机号码|手机号|移动电话|联系电话|联系方式|手机)$/i, "basic.phone", { negative: NEGATIVE_KEYWORDS["basic.phone"] }],
+    [/^(?:电子邮箱|邮箱|Email|E-mail|电子信箱)$/i, "basic.email", { negative: NEGATIVE_KEYWORDS["basic.email"] }],
+    [/^(?:身份证号|身份证号码|证件号码|居民身份证)$/i, "basic.id_number"],
+    [/^(?:证件类型)$/i, "basic.id_type"],
+    [/^(?:国籍|nationality|countryofcitizenship)$/i, "basic.nationality_country"],
+    [/^(?:民族|ethnicity)$/i, "basic.ethnicity"],
+    [/^(?:政治面貌|politicalStatus)$/i, "basic.political_status"],
+    [/^(?:家乡|籍贯|生源地|nativeplace|hometown)$/i, "basic.native_place"],
+    [/^(?:年龄|age)$/i, "basic.age"],
+    [/^(?:出生日期|出生年月|生日)$/i, "basic.birth_date"],
+    [/^(?:期望工作地点|期望城市|意向城市|preferredcity)$/i, "basic.preferred_city"],
+    
+    // 教育经历
     [/^(?:毕业学校|毕业院校|学校名称|最高学历学校|最高毕业院校|graduationschool|institution|university)$/i, "education[].school"],
     [/^(?:最高学历|学历|学历层次|最高教育程度|highestdegree|educationlevel|academicdegree)$/i, "education[].degree"],
     [/^(?:专业|所学专业|专业名称|major|fieldofstudy)$/i, "education[].major"],
     [/^(?:学历类型|学习形式|培养方式|学制)$/i, "education[].study_type"],
     [/^(?:毕业时间|毕业日期|毕业年月|起止时间|最高学历毕业时间|graduationdate|graduationtime|educationenddate)$/i, "education[].end_date"],
-    [/^(?:性别|gender|sex)$/i, "basic.gender"],
-    [/^(?:国籍|nationality|countryofcitizenship)$/i, "basic.nationality_country"],
-    [/^(?:家乡|籍贯|生源地|nativeplace|hometown)$/i, "basic.native_place"],
-    [/^(?:证件类型|idtype)$/i, "basic.id_type"],
-    [/^(?:证件号码|身份证号|身份证号码|idnumber)$/i, "basic.id_number"],
-    [/^(?:期望工作地点|期望城市|意向城市|preferredcity)$/i, "basic.preferred_city"],
+    [/^(?:入学时间|入学年月)$/i, "education[].start_date"],
+    [/^(?:GPA|绩点|成绩排名|专业排名)$/i, "education[].gpa"],
+    
+    // 其他
     [/^(?:country|国家|地区|所在国家)$/i, "basic.nationality_country"],
     [/^(?:linkedin|linkedIn profile|领英)$/i, "basic.linkedin"],
     [/^(?:website|个人网站|个人主页|portfolio|作品链接|个人链接)$/i, "basic.website"]
@@ -625,7 +659,15 @@
     for (const candidate of labels) {
       const compact = normalize(candidate);
       const strong = STRONG_FIELD_RULES.find(([pattern]) => pattern.test(compact));
-      if (strong) return { canonical: strong[1], confidence: 0.995, reason: "明确字段规则" };
+      if (strong) {
+        // 检查否定关键词：如果 label 包含否定词，跳过这个匹配
+        const options = strong[2] || {};
+        if (options.negative) {
+          const hasNegative = options.negative.some((negPattern) => negPattern.test(compact));
+          if (hasNegative) continue; // 跳过这个匹配，继续找下一个
+        }
+        return { canonical: strong[1], confidence: 0.995, reason: "明确字段规则" };
+      }
     }
     const contextualKey = descriptor.context ? `${descriptor.context}::${descriptor.label}` : "";
     if (contextualKey && siteMappings[contextualKey]
