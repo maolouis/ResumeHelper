@@ -27,11 +27,54 @@ const elements = {
   apiKeyInput: document.querySelector("#apiKeyInput"),
   aiEnhanceButton: document.querySelector("#aiEnhanceButton"),
   aiMethodSelect: document.querySelector("#aiMethodSelect"),
-  apiKeyRow: document.querySelector("#apiKeyRow")
+  apiKeyRow: document.querySelector("#apiKeyRow"),
+  cloudSettings: document.querySelector("#cloudSettings"),
+  providerSelect: document.querySelector("#providerSelect"),
+  apiEndpoint: document.querySelector("#apiEndpoint"),
+  modelName: document.querySelector("#modelName")
 };
 
 let appState = null;
 const saveTimers = new WeakMap();
+
+// 云端AI服务商配置
+const PROVIDERS = {
+  deepseek: {
+    endpoint: "https://api.deepseek.com/v1/chat/completions",
+    model: "deepseek-chat",
+    name: "DeepSeek"
+  },
+  openai: {
+    endpoint: "https://api.openai.com/v1/chat/completions",
+    model: "gpt-4o-mini",
+    name: "OpenAI"
+  },
+  doubao: {
+    endpoint: "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+    model: "doubao-pro-4k",
+    name: "豆包"
+  },
+  qwen: {
+    endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+    model: "qwen-turbo",
+    name: "通义千问"
+  },
+  kimi: {
+    endpoint: "https://api.moonshot.cn/v1/chat/completions",
+    model: "moonshot-v1-8k",
+    name: "Kimi"
+  },
+  zhipu: {
+    endpoint: "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    model: "glm-4-flash",
+    name: "智谱AI"
+  },
+  custom: {
+    endpoint: "",
+    model: "",
+    name: "自定义"
+  }
+};
 const documentTypeLabels = {
   resume: "个人简历",
   photo: "证件照/头像",
@@ -66,10 +109,13 @@ function request(message) {
   });
 }
 
-// DeepSeek API语义分析
-async function callDeepSeekAI(fields, apiKey) {
+// 云端AI API语义分析（支持多种服务商）
+async function callCloudAI(fields, apiKey, endpoint, model) {
   if (!apiKey) {
     throw new Error("请先配置API Key");
+  }
+  if (!endpoint || !model) {
+    throw new Error("请配置API地址和模型名称");
   }
   
   // 构建提示词
@@ -125,14 +171,14 @@ async function callDeepSeekAI(fields, apiKey) {
   const userPrompt = `请分析以下字段：\n${fieldList}\n\n请返回JSON格式的匹配结果。`;
 
   try {
-    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: model,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -143,7 +189,8 @@ async function callDeepSeekAI(fields, apiKey) {
     });
 
     if (!response.ok) {
-      throw new Error(`API调用失败: ${response.status}`);
+      const errText = await response.text();
+      throw new Error(`API调用失败: ${response.status} ${errText}`);
     }
 
     const data = await response.json();
@@ -153,7 +200,7 @@ async function callDeepSeekAI(fields, apiKey) {
     const result = JSON.parse(content);
     return result;
   } catch (error) {
-    console.error("DeepSeek API调用失败:", error);
+    console.error("云端AI API调用失败:", error);
     throw error;
   }
 }
@@ -672,26 +719,54 @@ elements.apiKeyInput.addEventListener("change", () => {
   chrome.storage.local.set({ deepseek_api_key: elements.apiKeyInput.value });
 });
 
-// 语义增强方式切换时显示/隐藏API Key输入框
+// 语义增强方式切换时显示/隐藏设置
 elements.aiMethodSelect.addEventListener("change", () => {
   const method = elements.aiMethodSelect.value;
-  // 云端AI和混合模式都需要API Key
-  if (method === "deepseek" || method === "hybrid") {
-    elements.apiKeyRow.hidden = false;
+  if (method === "cloud") {
+    elements.cloudSettings.hidden = false;
   } else {
-    elements.apiKeyRow.hidden = true;
+    elements.cloudSettings.hidden = true;
   }
 });
 
-// 加载API Key和设置
-chrome.storage.local.get(["deepseek_api_key", "ai_method"]).then((data) => {
-  if (data.deepseek_api_key) {
-    elements.apiKeyInput.value = data.deepseek_api_key;
+// 服务商切换时，自动填充endpoint和模型
+elements.providerSelect.addEventListener("change", () => {
+  const provider = elements.providerSelect.value;
+  const config = PROVIDERS[provider];
+  if (config) {
+    elements.apiEndpoint.value = config.endpoint;
+    elements.modelName.value = config.model;
+  }
+});
+
+// 保存配置到storage
+function saveCloudConfig() {
+  const config = {
+    provider: elements.providerSelect.value,
+    endpoint: elements.apiEndpoint.value,
+    model: elements.modelName.value,
+    apiKey: elements.apiKeyInput.value
+  };
+  chrome.storage.local.set({ cloud_config: config });
+}
+
+// 监听配置变化
+elements.apiKeyInput.addEventListener("change", saveCloudConfig);
+elements.apiEndpoint.addEventListener("change", saveCloudConfig);
+elements.modelName.addEventListener("change", saveCloudConfig);
+
+// 加载保存的配置
+chrome.storage.local.get(["cloud_config", "ai_method"]).then((data) => {
+  if (data.cloud_config) {
+    elements.providerSelect.value = data.cloud_config.provider || "deepseek";
+    elements.apiEndpoint.value = data.cloud_config.endpoint || PROVIDERS.deepseek.endpoint;
+    elements.modelName.value = data.cloud_config.model || PROVIDERS.deepseek.model;
+    elements.apiKeyInput.value = data.cloud_config.apiKey || "";
   }
   if (data.ai_method) {
     elements.aiMethodSelect.value = data.ai_method;
-    if (data.ai_method === "deepseek") {
-      elements.apiKeyRow.hidden = false;
+    if (data.ai_method === "cloud") {
+      elements.cloudSettings.hidden = false;
     }
   }
 });
@@ -719,14 +794,18 @@ async function aiEnhance() {
     let mappings = {};
     let methodName;
     
-    if (aiMethod === "deepseek") {
-      // 纯云端AI模式
-      if (!apiKey) {
-        showMessage("请先输入DeepSeek API Key", true);
+    if (aiMethod === "cloud") {
+      // 云端AI模式
+      const endpoint = elements.apiEndpoint.value.trim();
+      const model = elements.modelName.value.trim();
+      
+      if (!apiKey || !endpoint || !model) {
+        showMessage("请配置完整的云端API信息", true);
         return;
       }
-      showMessage("正在调用DeepSeek云端AI...");
-      const aiResult = await callDeepSeekAI(fieldsToAnalyze, apiKey);
+      
+      showMessage(`正在调用${PROVIDERS[elements.providerSelect.value]?.name || "云端AI"}...`);
+      const aiResult = await callCloudAI(fieldsToAnalyze, apiKey, endpoint, model);
       
       for (const [indexStr, canonical] of Object.entries(aiResult)) {
         const index = parseInt(indexStr) - 1;
@@ -734,7 +813,7 @@ async function aiEnhance() {
           mappings[fields[index].label] = canonical;
         }
       }
-      methodName = "DeepSeek云端AI";
+      methodName = "云端AI";
       
     } else {
       // 纯本地模式
