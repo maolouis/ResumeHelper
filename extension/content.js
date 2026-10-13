@@ -1,5 +1,5 @@
 (() => {
-  const CONTENT_VERSION = "0.5.1";
+  const CONTENT_VERSION = "0.5.2";
   if (globalThis.__resumeHelperContentLoaded === CONTENT_VERSION) {
     return;
   }
@@ -1120,7 +1120,7 @@
     for (let attempt = 0; attempt < 25 && !target; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 100));
       const ranked = rankVisibleOptions();
-      target = ranked[0]?.score >= 350 ? ranked[0].item : null;
+      target = ranked[0]?.score >= 500 ? ranked[0].item : null;
     }
     // 阶段2：兜底——如果可见选项中没匹配到，才尝试在搜索框输入文字
     if (!target && input && !input.readOnly && !input.disabled && ["text", "search"].includes(input.type)) {
@@ -1132,7 +1132,7 @@
       }
       await new Promise((resolve) => setTimeout(resolve, 400));
       const ranked = rankVisibleOptions();
-      target = ranked[0]?.score >= 350 ? ranked[0].item : null;
+      target = ranked[0]?.score >= 500 ? ranked[0].item : null;
     }
     if (target) {
       target.scrollIntoView({ block: "nearest", behavior: "auto" });
@@ -1183,11 +1183,62 @@
     return match[3] ? [`${year}-${month}-${day}`, `${year}/${month}/${day}`] : [`${year}-${month}`, `${year}/${month}`, `${year}年${Number(month)}月`];
   }
 
+  // Ant Design 3.x 日历面板交互：打开面板→year-select/month-select下拉选年月→点日期
+  async function pickCalendarDate(input, targetYear, targetMonth, targetDay) {
+    input.scrollIntoView({ block: "center", behavior: "auto" });
+    input.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, composed: true, button: 0, buttons: 1 }));
+    input.click();
+    await new Promise((r) => setTimeout(r, 400));
+    const panel = [...document.querySelectorAll(".ant-calendar-picker-container, .ant-calendar")]
+      .find((p) => p.offsetParent !== null && getComputedStyle(p).display !== "none");
+    if (!panel) return false;
+    // 选择年份：点击 year-select 打开年份面板
+    const yearSelect = panel.querySelector(".ant-calendar-year-select");
+    if (yearSelect && targetYear) {
+      yearSelect.click();
+      await new Promise((r) => setTimeout(r, 350));
+      const yearCells = [...panel.querySelectorAll(".ant-calendar-year-panel-year, .ant-calendar-year-panel-cell")];
+      const ycell = yearCells.find((c) => {
+        const n = parseInt(c.textContent.trim(), 10);
+        return n === targetYear && !c.closest(".ant-calendar-year-panel-last-decade-cell, .ant-calendar-year-panel-next-decade-cell");
+      });
+      if (ycell) { ycell.click(); await new Promise((r) => setTimeout(r, 350)); }
+    }
+    // 选择月份：点击 month-select 打开月份面板
+    const monthSelect = panel.querySelector(".ant-calendar-month-select");
+    if (monthSelect && targetMonth) {
+      monthSelect.click();
+      await new Promise((r) => setTimeout(r, 350));
+      const monthCells = [...panel.querySelectorAll(".ant-calendar-month-panel-month, .ant-calendar-month-panel-cell")];
+      const mcell = monthCells.find((c) => parseInt(c.textContent.trim(), 10) === targetMonth);
+      if (mcell) { mcell.click(); await new Promise((r) => setTimeout(r, 350)); }
+    }
+    // 完整日期：点目标日期格子
+    if (targetDay) {
+      const dates = [...panel.querySelectorAll(".ant-calendar-date")];
+      const target = dates.find((c) => {
+        if (c.textContent.trim() !== String(targetDay)) return false;
+        return !c.closest(".ant-calendar-next-month-btn-day, .ant-calendar-last-month-btn-day, .ant-calendar-next-month, .ant-calendar-last-month");
+      });
+      if (target) { target.click(); await new Promise((r) => setTimeout(r, 200)); return true; }
+    }
+    return true;
+  }
+
   async function fillDateControl(control, descriptor, text) {
     const input = control.matches("input") ? control : control.querySelector?.("input:not([type='hidden'])");
     if (!input || input.disabled) throw new Error(`日期字段"${descriptor.label}"没有可写输入框`);
     const candidates = dateInputValues(input, text, descriptor.label);
     if (!candidates.length) throw new Error(`日期值"${text}"无法解析为有效日期，跳过`);
+    const dm = String(text).match(/(\d{4})[-/.年](\d{1,2})(?:[-/.月](\d{1,2})?)?/);
+    const targetYear = dm ? parseInt(dm[1], 10) : null;
+    const targetMonth = dm ? parseInt(dm[2], 10) : null;
+    const targetDay = dm && dm[3] ? parseInt(dm[3], 10) : null;
+    // Ant Design 只读日历面板：通过面板交互选择
+    if (input.readOnly && targetYear && targetMonth) {
+      const ok = await pickCalendarDate(input, targetYear, targetMonth, targetDay);
+      if (ok && choiceScore(currentValue(control), choiceValues(text, descriptor.label)) >= 430) return { status: "filled" };
+    }
     for (const candidate of candidates) {
       input.focus();
       nativeSetter(input, "value", candidate);
@@ -1199,7 +1250,7 @@
       await new Promise((resolve) => setTimeout(resolve, 80));
       if (choiceScore(currentValue(control), choiceValues(text, descriptor.label)) >= 430) return { status: "filled" };
     }
-    throw new Error(`已写入日期“${text}”，但页面未保留该值，请手动核对`);
+    throw new Error(`已写入日期"${text}"，但页面未保留该值，请手动核对`);
   }
 
   async function fillControl(descriptor, desired, overwrite) {
