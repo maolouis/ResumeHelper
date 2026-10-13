@@ -400,6 +400,9 @@
         // 排除下拉浮层/弹出层/选项面板/选项元素
         if (element.closest("[class*='-dropdown'], [class*='-popup'], [class*='-overlay'], [class*='-option-list'], [class*='-menu'], [class*='cascader-menus'], [class*='picker-dropdown']")) return false;
         if (element.matches("[class*='-select-item'], [class*='-option'], [class*='select-option']")) return false;
+        // 排除上传组件容器
+        if (element.closest("[class*='upload'], [class*='dragger'], [class*='dropzone']")) return false;
+        if (element.matches("[class*='upload'], [class*='dragger'], [class*='dropzone']")) return false;
         if (!element.readOnly) return true;
         return element.getAttribute("role") === "combobox"
           || /select|picker|dropdown/i.test(String(element.className || ""))
@@ -428,6 +431,7 @@
       });
     const descriptors = rawResults
       .filter((descriptor) => descriptor.label)
+      .filter((descriptor) => !/^(YYYY|MM|DD)\b|^\s*\/\s*$/.test(descriptor.label.trim()))
       .filter((descriptor) => !isNavigationSearch(descriptor.control, descriptor.labelCandidates));
     return descriptors;
   }
