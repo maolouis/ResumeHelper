@@ -1,5 +1,5 @@
 (() => {
-  const CONTENT_VERSION = "0.5.3";
+  const CONTENT_VERSION = "0.5.4";
   if (globalThis.__resumeHelperContentLoaded === CONTENT_VERSION) {
     return;
   }
@@ -16,6 +16,127 @@
   const RADIO_GROUPS = "[class*='-radio-group'], [class*='radio-group'], [role='radiogroup']";
 
   const uploads = new Map();
+
+  // ============ Ternlight 本地语义模型（默认开启） ============
+  let ternlight = null;
+  let ternlightInit = null;
+  let fieldEmbeddings = []; // 预计算的标准字段 embeddings
+
+  // 标准字段定义（用于语义 embedding 对照）
+  const TERN_FIELDS = [
+    { key: "basic.full_name", name: "姓名", aliases: ["名字", "真实姓名", "应聘者姓名", "求职者姓名"] },
+    { key: "basic.gender", name: "性别", aliases: ["男", "女"] },
+    { key: "basic.phone", name: "手机号码", aliases: ["手机号", "联系电话", "联系方式", "手机"] },
+    { key: "basic.email", name: "电子邮箱", aliases: ["邮箱", "电子邮件"] },
+    { key: "basic.id_number", name: "身份证号", aliases: ["身份证号码", "证件号码"] },
+    { key: "basic.id_type", name: "证件类型", aliases: ["证件种类"] },
+    { key: "basic.nationality_country", name: "国籍", aliases: ["国家", "国籍地区"] },
+    { key: "basic.ethnicity", name: "民族", aliases: ["族群"] },
+    { key: "basic.political_status", name: "政治面貌", aliases: ["政治情况"] },
+    { key: "basic.birth_date", name: "出生日期", aliases: ["生日", "出生年月"] },
+    { key: "basic.native_place", name: "籍贯", aliases: ["家乡", "生源地", "老家"] },
+    { key: "basic.address", name: "现居地", aliases: ["居住地", "所在地", "现住址"] },
+    { key: "basic.age", name: "年龄", aliases: ["岁数"] },
+    { key: "basic.preferred_city", name: "期望工作地点", aliases: ["期望城市", "意向城市", "期望地点"] },
+    { key: "basic.available_duration", name: "可实习时长", aliases: ["实习时长", "到岗时间"] },
+    { key: "education[].school", name: "学校名称", aliases: ["院校", "毕业院校", "学校"] },
+    { key: "education[].degree", name: "学历", aliases: ["学位", "学历层次", "最高学历"] },
+    { key: "education[].major", name: "专业", aliases: ["所学专业", "专业名称"] },
+    { key: "education[].start_date", name: "入学时间", aliases: ["开始时间", "入学年月"] },
+    { key: "education[].end_date", name: "毕业时间", aliases: ["结束时间", "毕业年月", "预计毕业"] },
+    { key: "education[].gpa", name: "GPA", aliases: ["绩点", "平均成绩", "成绩排名"] },
+    { key: "education[].study_type", name: "学历类型", aliases: ["学习形式", "培养方式"] },
+    { key: "education[].department", name: "院系", aliases: ["学院", "二级学院"] },
+    { key: "education[].adviser", name: "导师姓名", aliases: ["导师", "指导教师"] },
+    { key: "education[].rank", name: "学习成绩排名", aliases: ["排名", "成绩排名"] },
+    { key: "work_experience[].company", name: "公司名称", aliases: ["企业名称", "单位名称", "公司"] },
+    { key: "work_experience[].position", name: "职位", aliases: ["岗位", "职务", "职位名称"] },
+    { key: "work_experience[].department", name: "部门", aliases: ["部门名称"] },
+    { key: "work_experience[].start_date", name: "入职时间", aliases: ["开始时间", "入职年月"] },
+    { key: "work_experience[].end_date", name: "离职时间", aliases: ["结束时间", "离职年月"] },
+    { key: "work_experience[].description", name: "工作描述", aliases: ["工作内容", "工作职责"] },
+    { key: "projects[].name", name: "项目名称", aliases: ["项目名", "项目标题"] },
+    { key: "projects[].role", name: "项目角色", aliases: ["担任角色", "项目职务"] },
+    { key: "projects[].start_date", name: "项目开始时间", aliases: ["项目开始日期"] },
+    { key: "projects[].end_date", name: "项目结束时间", aliases: ["项目结束日期"] },
+    { key: "projects[].description", name: "项目描述", aliases: ["项目内容", "项目职责"] },
+    { key: "certificates_awards[].name", name: "获奖名称", aliases: ["证书名称", "奖项名称", "荣誉名称"] },
+    { key: "certificates_awards[].level", name: "获奖级别", aliases: ["奖项级别", "等级", "级别"] },
+    { key: "certificates_awards[].date", name: "获奖时间", aliases: ["获得时间", "颁发时间"] },
+    { key: "certificates_awards[].description", name: "获奖情况", aliases: ["奖项描述", "获奖描述"] },
+    { key: "language_skills[].language", name: "语种", aliases: ["语言", "外语", "外语种类"] },
+    { key: "language_skills[].level", name: "语言水平", aliases: ["水平", "熟练程度"] },
+    { key: "language_skills[].certificate", name: "语言证书", aliases: ["英语证书", "语言成绩"] },
+    { key: "language_skills[].score", name: "语言成绩", aliases: ["分数", "考试成绩"] },
+    { key: "professional_skills[].name", name: "技能名称", aliases: ["技能", "专业技能"] },
+    { key: "professional_skills[].level", name: "技能水平", aliases: ["掌握程度"] },
+    { key: "publications[].title", name: "论文标题", aliases: ["论文名称", "著作名称"] },
+    { key: "publications[].journal", name: "发表期刊", aliases: ["期刊名称", "发表刊物"] },
+    { key: "patents[].name", name: "专利名称", aliases: [] },
+    { key: "patents[].number", name: "专利号", aliases: ["专利编号"] },
+  ];
+
+  function cosineSimilarity(a, b) {
+    if (!a || !b || a.length !== b.length) return 0;
+    let dot = 0, normA = 0, normB = 0;
+    for (let i = 0; i < a.length; i += 1) {
+      dot += a[i] * b[i];
+      normA += a[i] * a[i];
+      normB += b[i] * b[i];
+    }
+    if (!normA || !normB) return 0;
+    return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+  }
+
+  async function initTernlight() {
+    if (ternlightInit) return ternlightInit;
+    ternlightInit = (async () => {
+      try {
+        const url = chrome.runtime.getURL("ternlight/tern_engine.js");
+        ternlight = await import(url);
+        // 预计算所有标准字段的 embedding
+        fieldEmbeddings = TERN_FIELDS.map((def) => {
+          const nameEmb = ternlight.embed(def.name);
+          const aliasEmb = (def.aliases || []).map((a) => ternlight.embed(a));
+          return { def, nameEmb, aliasEmb };
+        });
+        console.log("[简历快填] Ternlight 语义模型已加载，默认开启");
+        return true;
+      } catch (e) {
+        console.warn("[简历快填] Ternlight 加载失败，使用规则匹配:", e);
+        ternlight = null;
+        return false;
+      }
+    })();
+    return ternlightInit;
+  }
+
+  // Ternlight 语义匹配：返回最佳匹配的 canonical key
+  function ternlightMatch(label, context) {
+    if (!ternlight || !fieldEmbeddings.length) return null;
+    const qEmb = ternlight.embed(label);
+    let best = null;
+    let bestSim = 0;
+    for (const item of fieldEmbeddings) {
+      let sim = cosineSimilarity(qEmb, item.nameEmb);
+      for (const aEmb of item.aliasEmb) {
+        const aSim = cosineSimilarity(qEmb, aEmb);
+        if (aSim > sim) sim = aSim;
+      }
+      // 上下文区块加成
+      const ctx = context || "";
+      if (ctx) {
+        const section = item.def.key.match(/^([a-z_]+)\[\]\./)?.[1] || "";
+        if (section && ctx.includes(section)) sim += 0.15;
+      }
+      if (sim > bestSim) { bestSim = sim; best = item.def.key; }
+    }
+    // 阈值：0.65 以上才匹配（保证准确率）
+    return bestSim >= 0.65 ? { canonical: best, similarity: bestSim } : null;
+  }
+
+  // 异步加载 Ternlight（不阻塞页面）
+  initTernlight();
   const ADD_PATTERNS = {
     job_intentions: /(?:新增|添加).{0,8}(?:求职意向|应聘意向)/,
     education: /(?:新增|添加).{0,8}(?:教育|学习)/,
@@ -794,6 +915,13 @@
         return { canonical: strong[1], confidence: 0.995, reason: "明确字段规则" };
       }
     }
+    // Ternlight 本地语义模型匹配（默认开启，在 strong rules 之后、模糊匹配之前）
+    if (ternlight) {
+      const tMatch = ternlightMatch(descriptor.label, descriptor.context);
+      if (tMatch) {
+        return { canonical: tMatch.canonical, confidence: Math.min(0.97, tMatch.similarity), reason: "Ternlight语义匹配" };
+      }
+    }
     const contextualKey = descriptor.context ? `${descriptor.context}::${descriptor.label}` : "";
     if (contextualKey && siteMappings[contextualKey]
       && !incompatibleField(descriptor.label, siteMappings[contextualKey], descriptor.context)) {
@@ -1380,6 +1508,7 @@
   }
 
   async function scanForm(profile = null, mappings = null) {
+    await initTernlight();
     const pageControls = controls(profile);
     const values = profile ? flattenProfile(profile) : {};
     const counters = {};
@@ -1408,6 +1537,7 @@
   }
 
   async function fillForm(profile, mappings, overwrite) {
+    await initTernlight(); // 确保本地语义模型已加载（默认开启）
     await expandRepeaters(profile, mappings);
     const values = flattenProfile(profile);
     const counters = {};
