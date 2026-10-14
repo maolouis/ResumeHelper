@@ -1,5 +1,5 @@
 (() => {
-  const CONTENT_VERSION = "0.5.5";
+  const CONTENT_VERSION = "0.5.6";
   if (globalThis.__resumeHelperContentLoaded === CONTENT_VERSION) {
     return;
   }
@@ -131,26 +131,33 @@
 
   // Ternlight 语义匹配：返回最佳匹配的 canonical key
   // 懒加载获取字段 embedding（首次调用时计算，之后从缓存读取）
-  function getFieldEmbeddings() {
+  // 异步分批计算，每批让出主线程，避免同步 BERT 前向传播阻塞页面
+  async function getFieldEmbeddings() {
     if (!fieldEmbeddings) return [];
-    if (fieldEmbeddings.length === TERN_FIELDS.length) return fieldEmbeddings;
-    for (let i = fieldEmbeddings.length; i < TERN_FIELDS.length; i++) {
-      const def = TERN_FIELDS[i];
-      try {
-        const nameEmb = ternlight.embed(def.name);
-        const aliasEmb = (def.aliases || []).map((a) => {
-          try { return ternlight.embed(a); } catch (e) { return null; }
-        }).filter(Boolean);
-        fieldEmbeddings.push({ def, nameEmb, aliasEmb });
-      } catch (e) {
-        fieldEmbeddings.push({ def, nameEmb: null, aliasEmb: [] });
+    let guard = 0;
+    while (fieldEmbeddings.length < TERN_FIELDS.length && guard < 100) {
+      guard += 1;
+      const batchEnd = Math.min(fieldEmbeddings.length + 4, TERN_FIELDS.length);
+      for (let i = fieldEmbeddings.length; i < batchEnd; i++) {
+        const def = TERN_FIELDS[i];
+        try {
+          const nameEmb = ternlight.embed(def.name);
+          const aliasEmb = (def.aliases || []).map((a) => {
+            try { return ternlight.embed(a); } catch (e) { return null; }
+          }).filter(Boolean);
+          fieldEmbeddings.push({ def, nameEmb, aliasEmb });
+        } catch (e) {
+          fieldEmbeddings.push({ def, nameEmb: null, aliasEmb: [] });
+        }
       }
+      // 每批 4 个字段后让出主线程，避免长时间阻塞
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
     return fieldEmbeddings;
   }
 
   // Ternlight 语义匹配：返回最佳匹配的 canonical key
-  function ternlightMatch(label, context) {
+  async function ternlightMatch(label, context) {
     if (!ternlight || !fieldEmbeddings) return null;
     let qEmb;
     try {
@@ -161,7 +168,7 @@
     if (!qEmb) return null;
     let best = null;
     let bestSim = 0;
-    const embs = getFieldEmbeddings();
+    const embs = await getFieldEmbeddings();
     for (const item of embs) {
       if (!item.nameEmb) continue;
       let sim = cosineSimilarity(qEmb, item.nameEmb);
@@ -726,10 +733,10 @@
     return { desired, recordIndex };
   }
 
-  function countCanonicals(pageControls, mappings) {
+  async function countCanonicals(pageControls, mappings) {
     const counts = {};
     for (const descriptor of pageControls) {
-      const canonical = resolveCanonical(descriptor, mappings);
+      const canonical = await resolveCanonical(descriptor, mappings);
       if (canonical) counts[canonical] = (counts[canonical] || 0) + 1;
     }
     return counts;
@@ -887,6 +894,8 @@
     [/^(?:期望工作地点|期望城市|意向城市|preferredcity)$/i, "basic.preferred_city"],
     [/^(?:现居地|居住地|所在地|现住址)$/i, "basic.address"],
     [/^(?:可实习时长|实习时长|可到岗时间|到岗时间)$/i, "basic.available_duration"],
+    [/^(?:应聘岗位|应聘职位|投递岗位|申请岗位|目标岗位|意向岗位)$/i, "basic.preferred_position"],
+    [/^(?:岗位类别|职位类别|岗位分类|职位类型|招聘类型|应聘类型)$/i, "job_intentions[].position"],
     
     // 教育经历
     [/^(?:毕业学校|毕业院校|学校名称|最高学历学校|最高毕业院校|graduationschool|institution|university)$/i, "education[].school"],
@@ -943,7 +952,7 @@
     return [...new Set([...(descriptor.labelCandidates || []), descriptor.label].map(cleanText).filter(Boolean))];
   }
 
-  function classifyCanonical(descriptor, mappings) {
+  async function classifyCanonical(descriptor, mappings) {
     const labels = descriptorLabels(descriptor);
     const normalizedLabels = labels.map(normalize).filter(Boolean);
     const label = normalize(descriptor.label);
@@ -964,7 +973,7 @@
     }
     // Ternlight 本地语义模型匹配（默认开启，在 strong rules 之后、模糊匹配之前）
     if (ternlight) {
-      const tMatch = ternlightMatch(descriptor.label, descriptor.context);
+      const tMatch = await ternlightMatch(descriptor.label, descriptor.context);
       if (tMatch) {
         return { canonical: tMatch.canonical, confidence: Math.min(0.97, tMatch.similarity), reason: "Ternlight语义匹配" };
       }
@@ -1029,8 +1038,8 @@
     return { canonical: "", confidence: 0, reason: "没有匹配字段" };
   }
 
-  function resolveCanonical(descriptor, mappings) {
-    const match = classifyCanonical(descriptor, mappings);
+  async function resolveCanonical(descriptor, mappings) {
+    const match = await classifyCanonical(descriptor, mappings);
     return match.confidence >= MIN_CLASSIFIER_CONFIDENCE ? match.canonical : "";
   }
 
@@ -1432,6 +1441,38 @@
     throw new Error(`已写入日期"${text}"，但页面未保留该值，请手动核对`);
   }
 
+  // ============ 值类型一致性检查（防止语义误匹配导致乱填） ============
+  // 手机号格式（11位，1开头，第二位3-9）
+  const PHONE_RE = /^1[3-9]\d{9}$/;
+  // 邮箱格式
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // 身份证号格式（18位）
+  const ID_RE = /^\d{17}[\dXx]$/;
+
+  function valueMatchesCanonical(value, canonical) {
+    const text = String(value ?? "").trim();
+    if (!text || !canonical) return true; // 空值不拦截
+    const canon = canonical.toLowerCase();
+    // 手机号只能填入电话相关字段
+    if (PHONE_RE.test(text)) {
+      const isPhoneField = canon.includes("phone") || canon.includes("telephone")
+        || canon.includes("mobile") || canon.includes("contact_number");
+      if (!isPhoneField) return false;
+    }
+    // 邮箱只能填入邮件相关字段
+    if (EMAIL_RE.test(text)) {
+      const isEmailField = canon.includes("email") || canon.includes("mail");
+      if (!isEmailField) return false;
+    }
+    // 身份证号只能填入证件号字段
+    if (ID_RE.test(text)) {
+      const isIdField = canon.includes("id_number") || canon.includes("idnumber")
+        || canon.includes("idnumber") || canon.includes("certificate_number");
+      if (!isIdField) return false;
+    }
+    return true;
+  }
+
   async function fillControl(descriptor, desired, overwrite) {
     const control = descriptor.control;
     const text = String(desired ?? "").trim();
@@ -1484,12 +1525,20 @@
     }
     if ((descriptor.type === "combobox" || control.closest(SELECT_WRAPPERS)) && !control.matches(DATE_WRAPPERS)) {
       if (await chooseCustomOption(control, text)) return { status: "filled" };
-      throw new Error(`下拉选项中没有与“${text}”匹配的选项`);
+      // 可编辑 input（非 readonly）下拉无匹配时，回退为普通文本输入
+      if (!control.readOnly) {
+        control.focus();
+        nativeSetter(control, "value", text);
+        dispatchEvents(control);
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        if (String(currentValue(control)).trim()) return { status: "filled" };
+      }
+      return { status: "skipped" };
     }
     if (isDateControl(control, descriptor)) return fillDateControl(control, descriptor, text);
     if (control.readOnly && descriptor.type === "text") {
       if (await chooseCustomOption(control, text)) return { status: "filled" };
-      throw new Error(`下拉选项中没有与“${text}”匹配的选项`);
+      return { status: "skipped" };
     }
     if (control.isContentEditable) {
       control.focus();
@@ -1517,10 +1566,18 @@
         const candidates = deepQueryAll("button, [role='button'], a").filter(isVisible);
         const button = candidates.find((item) => pattern.test(cleanText(item.innerText || item.textContent)));
         if (!button) break;
-        const before = controls().filter((item) => resolveCanonical(item, mappings)?.startsWith(`${section}[].`)).length;
+        const beforeItems = controls();
+        const beforeMatches = await Promise.all(
+          beforeItems.map((item) => resolveCanonical(item, mappings))
+        );
+        const before = beforeMatches.filter((c) => c?.startsWith(`${section}[].`)).length;
         button.click();
         await new Promise((resolve) => setTimeout(resolve, 250));
-        const after = controls().filter((item) => resolveCanonical(item, mappings)?.startsWith(`${section}[].`)).length;
+        const afterItems = controls();
+        const afterMatches = await Promise.all(
+          afterItems.map((item) => resolveCanonical(item, mappings))
+        );
+        const after = afterMatches.filter((c) => c?.startsWith(`${section}[].`)).length;
         attempts += 1;
         if (after <= before) break;
       }
@@ -1539,8 +1596,8 @@
     return { jobTitle: headings[0] || document.title, company: companyCandidate || "" };
   }
 
-  function publicDescriptor(descriptor, mappings) {
-    const match = mappings ? classifyCanonical(descriptor, mappings) : { canonical: "", confidence: 0, reason: "" };
+  async function publicDescriptor(descriptor, mappings) {
+    const match = mappings ? await classifyCanonical(descriptor, mappings) : { canonical: "", confidence: 0, reason: "" };
     return {
       label: descriptor.label,
       context: descriptor.context,
@@ -1559,16 +1616,17 @@
     const pageControls = controls(profile);
     const values = profile ? flattenProfile(profile) : {};
     const counters = {};
-    const canonicalCounts = mappings ? countCanonicals(pageControls, mappings) : {};
+    const canonicalCounts = mappings ? await countCanonicals(pageControls, mappings) : {};
     const fields = [];
     const missing = [];
     let ready = 0;
     for (const descriptor of pageControls) {
-      const canonical = mappings ? resolveCanonical(descriptor, mappings) : "";
+      const canonical = mappings ? await resolveCanonical(descriptor, mappings) : "";
       const selection = canonical ? selectProfileValue(profile, values, canonical, descriptor, counters, canonicalCounts) : { desired: "", recordIndex: 0 };
       const { desired, recordIndex } = selection;
+      const base = await publicDescriptor(descriptor, mappings);
       const field = {
-        ...publicDescriptor(descriptor, mappings),
+        ...base,
         canonical,
         record_index: recordIndex,
         hasProfileValue: Boolean(String(desired || "").trim()),
@@ -1589,7 +1647,7 @@
     const values = flattenProfile(profile);
     const counters = {};
     const pageControls = controls();
-    const canonicalCounts = countCanonicals(pageControls, mappings);
+    const canonicalCounts = await countCanonicals(pageControls, mappings);
     const result = {
       total: pageControls.length,
       filled: 0,
@@ -1603,11 +1661,11 @@
       meta: jobMeta()
     };
     for (const descriptor of pageControls) {
-      const match = classifyCanonical(descriptor, mappings);
+      const match = await classifyCanonical(descriptor, mappings);
       const canonical = match.confidence >= MIN_CLASSIFIER_CONFIDENCE ? match.canonical : "";
       if (!canonical) {
         if (!descriptor.value) {
-          const detail = publicDescriptor(descriptor, mappings);
+          const detail = await publicDescriptor(descriptor, mappings);
           if (match.canonical) {
             result.lowConfidence.push({
               ...detail,
@@ -1620,10 +1678,21 @@
         continue;
       }
       const { desired, recordIndex } = selectProfileValue(profile, values, canonical, descriptor, counters, canonicalCounts);
+      // 值类型一致性检查：手机号/邮箱/身份证号不能填入不相关字段
+      if (!valueMatchesCanonical(desired, canonical)) {
+        result.failed.push({
+          ...await publicDescriptor(descriptor, mappings),
+          canonical,
+          record_index: recordIndex,
+          error: `已阻止类型不匹配：值"${String(desired).slice(0, 20)}"与字段"${canonical}"不兼容`,
+          status: "类型安全拦截"
+        });
+        continue;
+      }
       try {
         const outcome = await fillControl(descriptor, desired, overwrite);
         const detail = {
-          ...publicDescriptor(descriptor, mappings),
+          ...await publicDescriptor(descriptor, mappings),
           canonical,
           record_index: recordIndex,
           value: String(outcome.status === "skipped" ? descriptor.value : desired || "")
@@ -1638,7 +1707,7 @@
           result.skippedFields.push(detail);
         }
         if (outcome.status === "missing") result.missing.push({
-          ...publicDescriptor(descriptor, mappings),
+          ...await publicDescriptor(descriptor, mappings),
           ...recordIdentity(profile, canonical, recordIndex),
           canonical,
           record_index: recordIndex,

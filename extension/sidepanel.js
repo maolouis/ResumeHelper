@@ -757,71 +757,59 @@ elements.scanButton.addEventListener("click", scan);
 elements.fillButton.addEventListener("click", fill);
 elements.importButton.addEventListener("click", importPage);
 elements.saveMissingButton.addEventListener("click", saveMissing);
-elements.profileSelect.addEventListener("change", selectProfile);
+if (elements.profileSelect) elements.profileSelect.addEventListener("change", selectProfile);
 elements.uploadButton.addEventListener("click", upload);
 elements.refreshButton.addEventListener("click", loadState);
-elements.aiEnhanceButton.addEventListener("click", aiEnhance);
-
-// API Key 保存/加载
-elements.apiKeyInput.addEventListener("change", () => {
-  chrome.storage.local.set({ deepseek_api_key: elements.apiKeyInput.value });
-});
-
-// 语义增强方式切换时显示/隐藏设置
-elements.aiMethodSelect.addEventListener("change", () => {
-  const method = elements.aiMethodSelect.value;
-  if (method === "cloud") {
-    elements.cloudSettings.hidden = false;
-  } else {
-    elements.cloudSettings.hidden = true;
-  }
-});
-
-// 服务商切换时，自动填充endpoint和模型
-elements.providerSelect.addEventListener("change", () => {
-  const provider = elements.providerSelect.value;
-  const config = PROVIDERS[provider];
-  if (config) {
-    elements.apiEndpoint.value = config.endpoint;
-    elements.modelName.value = config.model;
-  }
-});
 
 // 保存配置到storage
 function saveCloudConfig() {
   const config = {
-    provider: elements.providerSelect.value,
-    endpoint: elements.apiEndpoint.value,
-    model: elements.modelName.value,
-    apiKey: elements.apiKeyInput.value
+    provider: elements.providerSelect ? elements.providerSelect.value : "deepseek",
+    endpoint: elements.apiEndpoint ? elements.apiEndpoint.value : "",
+    model: elements.modelName ? elements.modelName.value : "",
+    apiKey: elements.apiKeyInput ? elements.apiKeyInput.value : ""
   };
   chrome.storage.local.set({ cloud_config: config });
 }
 
-// 监听配置变化
-elements.apiKeyInput.addEventListener("change", saveCloudConfig);
-elements.apiEndpoint.addEventListener("change", saveCloudConfig);
-elements.modelName.addEventListener("change", saveCloudConfig);
+// 语义增强控件已移除（Ternlight 默认开启），以下事件绑定做空值保护
+if (elements.aiEnhanceButton) elements.aiEnhanceButton.addEventListener("click", aiEnhance);
+if (elements.apiKeyInput) {
+  elements.apiKeyInput.addEventListener("change", () => {
+    chrome.storage.local.set({ deepseek_api_key: elements.apiKeyInput.value });
+  });
+  elements.apiKeyInput.addEventListener("change", saveCloudConfig);
+}
+if (elements.aiMethodSelect) {
+  elements.aiMethodSelect.addEventListener("change", () => {
+    const method = elements.aiMethodSelect.value;
+    if (elements.cloudSettings) elements.cloudSettings.hidden = method !== "cloud";
+  });
+}
+if (elements.providerSelect) {
+  elements.providerSelect.addEventListener("change", () => {
+    const config = PROVIDERS[elements.providerSelect.value];
+    if (config) {
+      if (elements.apiEndpoint) elements.apiEndpoint.value = config.endpoint;
+      if (elements.modelName) elements.modelName.value = config.model;
+    }
+  });
+}
+if (elements.apiEndpoint) elements.apiEndpoint.addEventListener("change", saveCloudConfig);
+if (elements.modelName) elements.modelName.addEventListener("change", saveCloudConfig);
 
 // 加载保存的配置
 chrome.storage.local.get(["cloud_config", "ai_method"]).then((data) => {
   if (data.cloud_config) {
-    elements.providerSelect.value = data.cloud_config.provider || "deepseek";
-    elements.apiEndpoint.value = data.cloud_config.endpoint || PROVIDERS.deepseek.endpoint;
-    elements.modelName.value = data.cloud_config.model || PROVIDERS.deepseek.model;
-    elements.apiKeyInput.value = data.cloud_config.apiKey || "";
+    if (elements.providerSelect) elements.providerSelect.value = data.cloud_config.provider || "deepseek";
+    if (elements.apiEndpoint) elements.apiEndpoint.value = data.cloud_config.endpoint || PROVIDERS.deepseek.endpoint;
+    if (elements.modelName) elements.modelName.value = data.cloud_config.model || PROVIDERS.deepseek.model;
+    if (elements.apiKeyInput) elements.apiKeyInput.value = data.cloud_config.apiKey || "";
   }
-  if (data.ai_method) {
+  if (data.ai_method && elements.aiMethodSelect) {
     elements.aiMethodSelect.value = data.ai_method;
-    if (data.ai_method === "cloud") {
-      elements.cloudSettings.hidden = false;
-    }
+    if (data.ai_method === "cloud" && elements.cloudSettings) elements.cloudSettings.hidden = false;
   }
-});
-
-// 保存选择的方式
-elements.aiMethodSelect.addEventListener("change", () => {
-  chrome.storage.local.set({ ai_method: elements.aiMethodSelect.value });
 });
 
 // AI语义增强

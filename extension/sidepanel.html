@@ -28,47 +28,6 @@
           <input id="overwriteToggle" type="checkbox">
           <span>覆盖页面中已有内容</span>
         </label>
-        <details class="advanced-settings">
-          <summary>高级设置（语义增强）</summary>
-          <div class="settings-row">
-            <label for="aiMethodSelect">语义增强方式:</label>
-            <select id="aiMethodSelect">
-              <option value="local">🟢 Ternlight本地模型（推荐·离线）</option>
-              <option value="cloud">🔵 云端AI API（最精准）</option>
-            </select>
-          </div>
-          <div class="settings-desc">
-            <p><strong>本地模型</strong>：7.5MB，离线可用，2.5ms/次，覆盖80%常见字段</p>
-            <p><strong>云端AI</strong>：支持DeepSeek/OpenAI/豆包/通义/Kimi/智谱等，准确率最高</p>
-          </div>
-          <div id="cloudSettings" hidden>
-            <div class="settings-row">
-              <label for="providerSelect">AI服务商:</label>
-              <select id="providerSelect">
-                <option value="deepseek">DeepSeek</option>
-                <option value="openai">OpenAI</option>
-                <option value="doubao">豆包（火山方舟）</option>
-                <option value="qwen">通义千问</option>
-                <option value="kimi">Kimi（月之暗面）</option>
-                <option value="zhipu">智谱AI</option>
-                <option value="custom">自定义</option>
-              </select>
-            </div>
-            <div class="settings-row">
-              <label for="apiEndpoint">API地址:</label>
-              <input id="apiEndpoint" type="text" value="https://api.deepseek.com/v1/chat/completions">
-            </div>
-            <div class="settings-row">
-              <label for="modelName">模型名称:</label>
-              <input id="modelName" type="text" value="deepseek-chat">
-            </div>
-            <div class="settings-row">
-              <label for="apiKeyInput">API Key:</label>
-              <input id="apiKeyInput" type="password" placeholder="输入API Key">
-            </div>
-          </div>
-          <button id="aiEnhanceButton" class="secondary" type="button">运行语义增强</button>
-        </details>
       </section>
 
       <section id="pageSection" class="section" hidden>
