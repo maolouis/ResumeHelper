@@ -1,5 +1,5 @@
 (() => {
-  const CONTENT_VERSION = "0.5.4";
+  const CONTENT_VERSION = "0.5.5";
   if (globalThis.__resumeHelperContentLoaded === CONTENT_VERSION) {
     return;
   }
@@ -20,7 +20,7 @@
   // ============ Ternlight 本地语义模型（默认开启） ============
   let ternlight = null;
   let ternlightInit = null;
-  let fieldEmbeddings = []; // 预计算的标准字段 embeddings
+  let fieldEmbeddings = null; // 懒加载缓存，首次匹配时构建
 
   // 标准字段定义（用于语义 embedding 对照）
   const TERN_FIELDS = [
@@ -90,21 +90,39 @@
 
   async function initTernlight() {
     if (ternlightInit) return ternlightInit;
+    // 只在顶层 frame 加载，避免 iframe 重复加载 WASM 导致内存爆炸
+    if (window.top !== window.self) {
+      ternlightInit = Promise.resolve(false);
+      return ternlightInit;
+    }
     ternlightInit = (async () => {
       try {
-        const url = chrome.runtime.getURL("ternlight/tern_engine.js");
-        ternlight = await import(url);
-        // 预计算所有标准字段的 embedding
-        fieldEmbeddings = TERN_FIELDS.map((def) => {
-          const nameEmb = ternlight.embed(def.name);
-          const aliasEmb = (def.aliases || []).map((a) => ternlight.embed(a));
-          return { def, nameEmb, aliasEmb };
-        });
-        console.log("[简历快填] Ternlight 语义模型已加载，默认开启");
-        return true;
+        // 30 秒超时保护，避免 WASM 加载卡死整个填写流程
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Ternlight 加载超时")), 30000)
+        );
+        const load = (async () => {
+          const jsUrl = chrome.runtime.getURL("ternlight/tern_engine.js");
+          const wasmUrl = chrome.runtime.getURL("ternlight/tern_engine_bg.wasm");
+          const mod = await import(jsUrl);
+          // 必须调用 default export (__wbg_init) 初始化 WASM 运行时
+          if (typeof mod.default === "function") {
+            await mod.default(wasmUrl);
+          }
+          ternlight = mod;
+          // 验证 WASM 是否真正可用
+          const testEmb = ternlight.embed("测试");
+          if (!testEmb || !testEmb.length) throw new Error("embed 返回空结果");
+          // embedding 懒加载：不在这里预计算，首次匹配时按需构建并缓存
+          fieldEmbeddings = [];
+          console.log("[简历快填] Ternlight 语义模型已加载，默认开启");
+          return true;
+        })();
+        return await Promise.race([load, timeout]);
       } catch (e) {
         console.warn("[简历快填] Ternlight 加载失败，使用规则匹配:", e);
         ternlight = null;
+        fieldEmbeddings = [];
         return false;
       }
     })();
@@ -112,16 +130,46 @@
   }
 
   // Ternlight 语义匹配：返回最佳匹配的 canonical key
+  // 懒加载获取字段 embedding（首次调用时计算，之后从缓存读取）
+  function getFieldEmbeddings() {
+    if (!fieldEmbeddings) return [];
+    if (fieldEmbeddings.length === TERN_FIELDS.length) return fieldEmbeddings;
+    for (let i = fieldEmbeddings.length; i < TERN_FIELDS.length; i++) {
+      const def = TERN_FIELDS[i];
+      try {
+        const nameEmb = ternlight.embed(def.name);
+        const aliasEmb = (def.aliases || []).map((a) => {
+          try { return ternlight.embed(a); } catch (e) { return null; }
+        }).filter(Boolean);
+        fieldEmbeddings.push({ def, nameEmb, aliasEmb });
+      } catch (e) {
+        fieldEmbeddings.push({ def, nameEmb: null, aliasEmb: [] });
+      }
+    }
+    return fieldEmbeddings;
+  }
+
+  // Ternlight 语义匹配：返回最佳匹配的 canonical key
   function ternlightMatch(label, context) {
-    if (!ternlight || !fieldEmbeddings.length) return null;
-    const qEmb = ternlight.embed(label);
+    if (!ternlight || !fieldEmbeddings) return null;
+    let qEmb;
+    try {
+      qEmb = ternlight.embed(label);
+    } catch (e) {
+      return null;
+    }
+    if (!qEmb) return null;
     let best = null;
     let bestSim = 0;
-    for (const item of fieldEmbeddings) {
+    const embs = getFieldEmbeddings();
+    for (const item of embs) {
+      if (!item.nameEmb) continue;
       let sim = cosineSimilarity(qEmb, item.nameEmb);
       for (const aEmb of item.aliasEmb) {
-        const aSim = cosineSimilarity(qEmb, aEmb);
-        if (aSim > sim) sim = aSim;
+        try {
+          const aSim = cosineSimilarity(qEmb, aEmb);
+          if (aSim > sim) sim = aSim;
+        } catch (e) { /* skip */ }
       }
       // 上下文区块加成
       const ctx = context || "";
@@ -135,8 +183,7 @@
     return bestSim >= 0.65 ? { canonical: best, similarity: bestSim } : null;
   }
 
-  // 异步加载 Ternlight（不阻塞页面）
-  initTernlight();
+  // Ternlight 只在 fillForm/scanForm 时按需加载，不在页面加载时主动初始化
   const ADD_PATTERNS = {
     job_intentions: /(?:新增|添加).{0,8}(?:求职意向|应聘意向)/,
     education: /(?:新增|添加).{0,8}(?:教育|学习)/,
