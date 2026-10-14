@@ -1,5 +1,5 @@
 (() => {
-  const CONTENT_VERSION = "0.5.6";
+  const CONTENT_VERSION = "0.5.7";
   if (globalThis.__resumeHelperContentLoaded === CONTENT_VERSION) {
     return;
   }
@@ -23,58 +23,39 @@
   let fieldEmbeddings = null; // 懒加载缓存，首次匹配时构建
 
   // 标准字段定义（用于语义 embedding 对照）
-  const TERN_FIELDS = [
-    { key: "basic.full_name", name: "姓名", aliases: ["名字", "真实姓名", "应聘者姓名", "求职者姓名"] },
-    { key: "basic.gender", name: "性别", aliases: ["男", "女"] },
-    { key: "basic.phone", name: "手机号码", aliases: ["手机号", "联系电话", "联系方式", "手机"] },
-    { key: "basic.email", name: "电子邮箱", aliases: ["邮箱", "电子邮件"] },
-    { key: "basic.id_number", name: "身份证号", aliases: ["身份证号码", "证件号码"] },
-    { key: "basic.id_type", name: "证件类型", aliases: ["证件种类"] },
-    { key: "basic.nationality_country", name: "国籍", aliases: ["国家", "国籍地区"] },
-    { key: "basic.ethnicity", name: "民族", aliases: ["族群"] },
-    { key: "basic.political_status", name: "政治面貌", aliases: ["政治情况"] },
-    { key: "basic.birth_date", name: "出生日期", aliases: ["生日", "出生年月"] },
-    { key: "basic.native_place", name: "籍贯", aliases: ["家乡", "生源地", "老家"] },
-    { key: "basic.address", name: "现居地", aliases: ["居住地", "所在地", "现住址"] },
-    { key: "basic.age", name: "年龄", aliases: ["岁数"] },
-    { key: "basic.preferred_city", name: "期望工作地点", aliases: ["期望城市", "意向城市", "期望地点"] },
-    { key: "basic.available_duration", name: "可实习时长", aliases: ["实习时长", "到岗时间"] },
-    { key: "education[].school", name: "学校名称", aliases: ["院校", "毕业院校", "学校"] },
-    { key: "education[].degree", name: "学历", aliases: ["学位", "学历层次", "最高学历"] },
-    { key: "education[].major", name: "专业", aliases: ["所学专业", "专业名称"] },
-    { key: "education[].start_date", name: "入学时间", aliases: ["开始时间", "入学年月"] },
-    { key: "education[].end_date", name: "毕业时间", aliases: ["结束时间", "毕业年月", "预计毕业"] },
-    { key: "education[].gpa", name: "GPA", aliases: ["绩点", "平均成绩", "成绩排名"] },
-    { key: "education[].study_type", name: "学历类型", aliases: ["学习形式", "培养方式"] },
-    { key: "education[].department", name: "院系", aliases: ["学院", "二级学院"] },
-    { key: "education[].adviser", name: "导师姓名", aliases: ["导师", "指导教师"] },
-    { key: "education[].rank", name: "学习成绩排名", aliases: ["排名", "成绩排名"] },
-    { key: "work_experience[].company", name: "公司名称", aliases: ["企业名称", "单位名称", "公司"] },
-    { key: "work_experience[].position", name: "职位", aliases: ["岗位", "职务", "职位名称"] },
-    { key: "work_experience[].department", name: "部门", aliases: ["部门名称"] },
-    { key: "work_experience[].start_date", name: "入职时间", aliases: ["开始时间", "入职年月"] },
-    { key: "work_experience[].end_date", name: "离职时间", aliases: ["结束时间", "离职年月"] },
-    { key: "work_experience[].description", name: "工作描述", aliases: ["工作内容", "工作职责"] },
-    { key: "projects[].name", name: "项目名称", aliases: ["项目名", "项目标题"] },
-    { key: "projects[].role", name: "项目角色", aliases: ["担任角色", "项目职务"] },
-    { key: "projects[].start_date", name: "项目开始时间", aliases: ["项目开始日期"] },
-    { key: "projects[].end_date", name: "项目结束时间", aliases: ["项目结束日期"] },
-    { key: "projects[].description", name: "项目描述", aliases: ["项目内容", "项目职责"] },
-    { key: "certificates_awards[].name", name: "获奖名称", aliases: ["证书名称", "奖项名称", "荣誉名称"] },
-    { key: "certificates_awards[].level", name: "获奖级别", aliases: ["奖项级别", "等级", "级别"] },
-    { key: "certificates_awards[].date", name: "获奖时间", aliases: ["获得时间", "颁发时间"] },
-    { key: "certificates_awards[].description", name: "获奖情况", aliases: ["奖项描述", "获奖描述"] },
-    { key: "language_skills[].language", name: "语种", aliases: ["语言", "外语", "外语种类"] },
-    { key: "language_skills[].level", name: "语言水平", aliases: ["水平", "熟练程度"] },
-    { key: "language_skills[].certificate", name: "语言证书", aliases: ["英语证书", "语言成绩"] },
-    { key: "language_skills[].score", name: "语言成绩", aliases: ["分数", "考试成绩"] },
-    { key: "professional_skills[].name", name: "技能名称", aliases: ["技能", "专业技能"] },
-    { key: "professional_skills[].level", name: "技能水平", aliases: ["掌握程度"] },
-    { key: "publications[].title", name: "论文标题", aliases: ["论文名称", "著作名称"] },
-    { key: "publications[].journal", name: "发表期刊", aliases: ["期刊名称", "发表刊物"] },
-    { key: "patents[].name", name: "专利名称", aliases: [] },
-    { key: "patents[].number", name: "专利号", aliases: ["专利编号"] },
-  ];
+  // 单一事实源：field_schema.js（由 app/defaults.py 生成，canonical key 与档案结构一致）。
+  // 此处仅在 schema 未注入时做极小兜底。
+  const TERN_FIELDS = (() => {
+    const schema = globalThis.__RESUME_FIELD_SCHEMA;
+    if (schema && Array.isArray(schema.fields) && schema.fields.length) return schema.fields;
+    return [
+      { key: "basic.full_name", name: "姓名", section: "basic", aliases: ["名字", "真实姓名", "应聘者姓名"] },
+      { key: "basic.gender", name: "性别", section: "basic", aliases: ["男", "女"] },
+      { key: "basic.phone", name: "手机号码", section: "basic", aliases: ["手机号", "联系电话", "联系方式", "手机"] },
+      { key: "basic.email", name: "电子邮箱", section: "basic", aliases: ["邮箱", "电子邮件"] },
+      { key: "basic.nationality_country", name: "国籍", section: "basic", aliases: ["国家"] },
+      { key: "basic.nationality", name: "民族", section: "basic", aliases: ["民族"] },
+      { key: "education[].school", name: "学校", section: "education", aliases: ["学校名称", "毕业院校", "院校"] },
+      { key: "education[].degree", name: "学历", section: "education", aliases: ["最高学历", "学历层次"] },
+      { key: "education[].major", name: "专业", section: "education", aliases: ["所学专业", "专业名称"] },
+      { key: "education[].start_date", name: "入学时间", section: "education", aliases: ["开始时间"] },
+      { key: "education[].end_date", name: "毕业时间", section: "education", aliases: ["结束时间", "毕业年月"] },
+      { key: "work_experience[].company", name: "公司/单位", section: "work_experience", aliases: ["公司名称", "单位名称", "公司"] },
+      { key: "work_experience[].position", name: "职位", section: "work_experience", aliases: ["岗位", "职务", "职位名称"] },
+      { key: "work_experience[].start_date", name: "入职时间", section: "work_experience", aliases: ["开始时间"] },
+      { key: "work_experience[].end_date", name: "离职时间", section: "work_experience", aliases: ["结束时间"] },
+      { key: "projects[].name", name: "项目名称", section: "projects", aliases: ["项目名"] },
+      { key: "projects[].role", name: "项目角色", section: "projects", aliases: ["担任角色", "项目职务"] },
+      { key: "certificates_awards[].name", name: "名称", section: "certificates_awards", aliases: ["证书名称", "奖项名称", "获奖名称"] },
+      { key: "certificates_awards[].level", name: "获奖级别", section: "certificates_awards", aliases: ["级别", "奖项级别"] },
+      { key: "language_skills[].language", name: "语种", section: "language_skills", aliases: ["语言", "外语"] },
+      { key: "language_skills[].level", name: "掌握程度", section: "language_skills", aliases: ["语言水平", "熟练程度"] },
+      { key: "professional_skills[].name", name: "技能名称", section: "professional_skills", aliases: ["技能", "专业技能"] },
+      { key: "professional_skills[].level", name: "熟练程度", section: "professional_skills", aliases: ["技能水平", "掌握程度"] },
+      { key: "self_evaluation", name: "自我评价", section: "long_text", aliases: ["个人评价", "自我介绍"] },
+      { key: "skills", name: "专业技能", section: "long_text", aliases: ["技能特长", "技能"] }
+    ];
+  })();
 
   function cosineSimilarity(a, b) {
     if (!a || !b || a.length !== b.length) return 0;
@@ -169,6 +150,7 @@
     let best = null;
     let bestSim = 0;
     const embs = await getFieldEmbeddings();
+    const ctx = context || "";
     for (const item of embs) {
       if (!item.nameEmb) continue;
       let sim = cosineSimilarity(qEmb, item.nameEmb);
@@ -178,11 +160,11 @@
           if (aSim > sim) sim = aSim;
         } catch (e) { /* skip */ }
       }
-      // 上下文区块加成
-      const ctx = context || "";
-      if (ctx) {
-        const section = item.def.key.match(/^([a-z_]+)\[\]\./)?.[1] || "";
-        if (section && ctx.includes(section)) sim += 0.15;
+      // 上下文区块：section 字段只在其所属区块内加成，跨区块惩罚（降低跨区误匹配）
+      const section = item.def.section || "";
+      if (section && section !== "basic" && section !== "long_text") {
+        if (ctx === section) sim += 0.12;
+        else if (ctx) sim -= 0.18;
       }
       if (sim > bestSim) { bestSim = sim; best = item.def.key; }
     }
@@ -275,7 +257,7 @@
       .replace(/工作城市|意向城市/g, "期望工作地点");
   }
 
-  function similarity(left, right) {
+  function levenshteinSimilarity(left, right) {
     const a = semanticNormalize(left);
     const b = semanticNormalize(right);
     if (!a || !b) return 0;
@@ -292,6 +274,30 @@
       }
     }
     return 1 - previous[b.length] / Math.max(a.length, b.length);
+  }
+
+  // 字符集合 Jaccard：捕捉中文短标签的共享字（如"院校/学校""薪资/月薪"）
+  function charJaccard(left, right) {
+    const a = new Set(String(left || "").split(""));
+    const b = new Set(String(right || "").split(""));
+    if (!a.size || !b.size) return 0;
+    let inter = 0;
+    for (const ch of a) if (b.has(ch)) inter += 1;
+    return inter / (a.size + b.size - inter);
+  }
+
+  // 混合相似度：语义归一化相等 > 包含 > max(编辑距离, 字符 Jaccard)
+  function similarity(left, right) {
+    const a = semanticNormalize(left);
+    const b = semanticNormalize(right);
+    if (!a || !b) return 0;
+    if (a === b) return 1;
+    const shorter = a.length <= b.length ? a : b;
+    const longer = a.length <= b.length ? b : a;
+    if (shorter.length >= 2 && longer.includes(shorter)) {
+      return Math.min(0.95, 0.8 + 0.2 * (shorter.length / longer.length));
+    }
+    return Math.max(levenshteinSimilarity(a, b), charJaccard(a, b) * 0.9);
   }
 
   function incompatibleField(label, canonical, context) {
@@ -714,8 +720,26 @@
     return bestIndex;
   }
 
+  function deriveAge(profile) {
+    const birth = String(profile?.basic?.birth_date || "");
+    const yearMatch = birth.match(/(\d{4})/);
+    if (!yearMatch) return "";
+    const year = Number(yearMatch[1]);
+    const now = new Date();
+    let age = now.getFullYear() - year;
+    const monthMatch = birth.match(/\d{4}\D+(\d{1,2})/);
+    if (monthMatch) {
+      const month = Number(monthMatch[1]);
+      if (month > now.getMonth() + 1) age -= 1;
+    }
+    return age > 0 && age < 120 ? String(age) : "";
+  }
+
   function selectProfileValue(profile, values, canonical, descriptor, counters, canonicalCounts) {
-    if (!canonical.includes("[]")) return { desired: values[canonical], recordIndex: 0 };
+    if (!canonical.includes("[]")) {
+      if (canonical === "basic.age") return { desired: deriveAge(profile), recordIndex: 0 };
+      return { desired: values[canonical], recordIndex: 0 };
+    }
     const section = canonical.match(/^([a-z_]+)\[\]\./)?.[1] || "";
     const labels = descriptorLabels(descriptor).join(" ");
     const educationSummary = section === "education"
@@ -768,7 +792,7 @@
       ],
       campus_experience: [
         [/(实践名称|活动名称|组织名称|社团名称|学校组织)/, "campus_experience[].organization"], [/(角色|职务)/, "campus_experience[].role"],
-        [/开始/, "campus_experience[].start_date"], [/结束/, "campus_experience[].end_date"], [/至今|是否仍在/, "campus_experience[].is_current"],
+        [/开始/, "campus_experience[].start_date"], [/结束/, "campus_experience[].end_date"],
         [/(实践描述|活动描述|经历描述|实践内容|工作内容)/, "campus_experience[].description"]
       ],
       certificates_awards: [
@@ -830,7 +854,14 @@
     "basic.id_number": [/导师/, /联系人/, /负责人/, /证明人/, /推荐人/, /紧急联系人/, /家属/],
     "basic.nationality_country": [],
   };
-  
+
+  // 泛称基础字段（姓名/电话/邮箱）在联系人区块内应优先匹配区块字段，而不是本人信息
+  const GENERIC_BASIC_SECTION_CONFLICT = {
+    "basic.full_name": ["emergency_contacts", "family_members", "references"],
+    "basic.phone": ["emergency_contacts", "family_members", "references"],
+    "basic.email": ["emergency_contacts", "references"]
+  };
+
   // 上下文感知：在特定区块内的字段应该匹配对应的上下文字段
   const CONTEXT_BLOCK_KEYWORDS = [
     { context: "education", keywords: [/教育经历/, /教育背景/, /学历信息/, /学业信息/, /教育信息/, /学历背景/] },
@@ -886,16 +917,17 @@
     [/^(?:身份证号|身份证号码|证件号码|居民身份证)$/i, "basic.id_number"],
     [/^(?:证件类型)$/i, "basic.id_type"],
     [/^(?:国籍|nationality|countryofcitizenship)$/i, "basic.nationality_country"],
-    [/^(?:民族|ethnicity)$/i, "basic.ethnicity"],
+    [/^(?:民族|ethnicity)$/i, "basic.nationality"],
     [/^(?:政治面貌|politicalStatus)$/i, "basic.political_status"],
     [/^(?:家乡|籍贯|生源地|nativeplace|hometown)$/i, "basic.native_place"],
-    [/^(?:年龄|age)$/i, "basic.age"],
     [/^(?:出生日期|出生年月|生日)$/i, "basic.birth_date"],
+    [/^(?:年龄|age|周岁)$/i, "basic.age"],
     [/^(?:期望工作地点|期望城市|意向城市|preferredcity)$/i, "basic.preferred_city"],
-    [/^(?:现居地|居住地|所在地|现住址)$/i, "basic.address"],
-    [/^(?:可实习时长|实习时长|可到岗时间|到岗时间)$/i, "basic.available_duration"],
+    [/^(?:现居地|居住地|所在地)$/i, "basic.current_city"],
+    [/^(?:现住址)$/i, "basic.address"],
+    [/^(?:可到岗时间|到岗时间)$/i, "basic.available_date"],
     [/^(?:应聘岗位|应聘职位|投递岗位|申请岗位|目标岗位|意向岗位)$/i, "basic.preferred_position"],
-    [/^(?:岗位类别|职位类别|岗位分类|职位类型|招聘类型|应聘类型)$/i, "job_intentions[].position"],
+    [/^(?:岗位类别|职位类别|岗位分类|招聘类型|应聘类型)$/i, "job_intentions[].position"],
     
     // 教育经历
     [/^(?:毕业学校|毕业院校|学校名称|最高学历学校|最高毕业院校|graduationschool|institution|university)$/i, "education[].school"],
@@ -934,13 +966,13 @@
     
     // 语言能力
     [/^(?:语种|语言|外语|语言种类|languagetype)$/i, "language_skills[].language"],
-    [/^(?:语言水平|外语水平|语言程度|熟练程度)$/i, "language_skills[].level"],
-    [/^(?:语言证书|英语证书|外语证书|证书名称)$/i, "language_skills[].certificate"],
+    [/^(?:语言水平|外语水平|语言程度|掌握程度)$/i, "language_skills[].level"],
+    [/^(?:语言证书|英语证书|外语证书)$/i, "language_skills[].certificate"],
     [/^(?:语言成绩|分数|考试成绩)$/i, "language_skills[].score"],
     
     // 专业技能
     [/^(?:技能名称|技能|技术名称|技能类型)$/i, "professional_skills[].name"],
-    [/^(?:技能水平|熟练程度|掌握程度)$/i, "professional_skills[].level"],
+    [/^(?:技能水平|熟练程度)$/i, "professional_skills[].level"],
     
     // 其他
     [/^(?:country|国家|地区|所在国家)$/i, "basic.nationality_country"],
@@ -968,6 +1000,8 @@
           const hasNegative = options.negative.some((negPattern) => negPattern.test(compact));
           if (hasNegative) continue; // 跳过这个匹配，继续找下一个
         }
+        // 联系人区块内的泛称「姓名/电话/邮箱」交给后续上下文匹配，避免填成本人信息
+        if (GENERIC_BASIC_SECTION_CONFLICT[strong[1]]?.includes(descriptor.context)) continue;
         return { canonical: strong[1], confidence: 0.995, reason: "明确字段规则" };
       }
     }
@@ -996,46 +1030,52 @@
       const confidence = Math.max(0, ...normalizedLabels.map((candidate) => similarity(siteLabel, candidate)));
       if (confidence >= 0.86) return { canonical, confidence, reason: "相似站点映射" };
     }
-    let best = { canonical: "", score: 0 };
+    let best = { canonical: "", confidence: 0 };
     for (const [canonical, aliases] of Object.entries(mappings?.global || {})) {
       if (incompatibleField(descriptor.label, canonical, descriptor.context)) continue;
+      // 联系人区块内，泛称基础字段（姓名/电话/邮箱）即使别名命中也不提升，交由区块字段，
+      // 避免把本人信息填进紧急联系人/家庭成员/证明人。
+      if (GENERIC_BASIC_SECTION_CONFLICT[canonical]?.includes(descriptor.context)) continue;
+      const section = canonical.match(/^([a-z_]+)\[\]\./)?.[1] || "";
+      let bestConf = 0;
       for (const aliasRaw of aliases) {
         const alias = normalize(aliasRaw);
         if (!alias) continue;
-        let score = 0;
         for (const candidate of normalizedLabels) {
           const semanticLabel = semanticNormalize(candidate);
           const semanticAlias = semanticNormalize(alias);
           const asciiAlias = /^[a-z0-9]+$/.test(alias);
-          let candidateScore = 0;
-          if (candidate === alias) candidateScore = 1000 + alias.length;
-          else if (semanticLabel === semanticAlias) candidateScore = 940 + semanticAlias.length;
-          else if (!asciiAlias && candidate.includes(alias) && alias.length >= 2) candidateScore = 720 + alias.length;
-          else if (!asciiAlias && alias.includes(candidate) && candidate.length >= 3) candidateScore = 620 + candidate.length;
-          const fuzzy = similarity(candidate, alias);
-          if (fuzzy >= 0.72 && Math.min(candidate.length, alias.length) >= 3) candidateScore = Math.max(candidateScore, 520 + Math.round(fuzzy * 100));
-          score = Math.max(score, candidateScore);
+          let conf = 0;
+          if (candidate === alias) conf = 0.99;
+          else if (semanticLabel === semanticAlias) conf = 0.97;
+          else if (!asciiAlias && candidate.includes(alias) && alias.length >= 2) conf = 0.85;
+          else {
+            const fuzzy = similarity(candidate, alias);
+            // 模糊相似度按比例映射为置信度（不设硬门槛）：弱匹配返回低置信度，
+            // 由 resolveCanonical 的 MIN_CLASSIFIER_CONFIDENCE 阈值统一拦截。
+            if (fuzzy > 0) conf = Math.min(0.84, fuzzy);
+          }
+          if (conf > bestConf) bestConf = conf;
         }
         // 长文本问题（如 textarea 的完整题目）不应仅因题目中碰巧提到某个词就匹配字段；
         // 只有短 label 才做 combined.includes 加成。
         const labelLen = normalize(descriptor.label).length;
         if (labelLen <= 60) {
           const combined = normalize(`${descriptor.contextText}${descriptor.label}`);
-          if (combined.includes(alias) && alias.length >= 3) score = Math.max(score, 760 + alias.length);
+          if (combined.includes(alias) && alias.length >= 3) bestConf = Math.max(bestConf, 0.88);
         }
-        if (descriptor.context && canonical.startsWith(`${descriptor.context}[].`)) score += 200;
-        // 上下文不匹配时，大幅扣分，避免跨区块误匹配
-        if (descriptor.context && !canonical.startsWith(`${descriptor.context}[].`) && canonical.includes("[]")) score -= 150;
-        if (score > best.score) best = { canonical, score };
       }
+      // 上下文区块：同区小幅加分并允许越过 0.99，使同区块字段在歧义别名（如「工作地点」）上
+      // 严格优先于跨区块 / basic.* 的同名别名。
+      if (descriptor.context && section === descriptor.context) bestConf += 0.05;
+      if (bestConf > best.confidence) best = { canonical, confidence: bestConf };
     }
-    if (best.score >= 520) {
-      const confidence = Math.min(0.99, best.score / 1000);
-      return { canonical: best.canonical, confidence, reason: "字段语义匹配" };
+    if (best.confidence >= MIN_CLASSIFIER_CONFIDENCE) {
+      return { canonical: best.canonical, confidence: Math.min(0.99, best.confidence), reason: "字段语义匹配" };
     }
     const fallback = contextFallback(descriptor.label, descriptor.context);
     if (fallback) return { canonical: fallback, confidence: 0.82, reason: "栏目规则匹配" };
-    return { canonical: "", confidence: 0, reason: "没有匹配字段" };
+    return { canonical: best.canonical, confidence: best.confidence, reason: best.canonical ? "字段语义匹配(低置信度)" : "没有匹配字段" };
   }
 
   async function resolveCanonical(descriptor, mappings) {
@@ -1448,11 +1488,18 @@
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   // 身份证号格式（18位）
   const ID_RE = /^\d{17}[\dXx]$/;
+  // 纯日期值（YYYY-MM / YYYY-MM-DD / 中文年月日）
+  const DATE_VALUE_RE = /^\d{4}(?:[-/.年]\d{1,2})(?:[-/.月]\d{1,2})?日?$/;
+  // 学历枚举（只应填入学历/学位相关字段）
+  const DEGREE_VALUES = ["博士", "硕士", "本科", "学士", "大专", "专科", "高中", "中专", "MBA"];
+  // 机构/公司名后缀（不应填入姓名字段）
+  const COMPANY_SUFFIX_RE = /(?:有限公司|有限责任公司|股份有限公司|集团|研究院|研究所|事务所|银行|医院|大学|学院|学校|中心|委员会|政府)$/;
 
   function valueMatchesCanonical(value, canonical) {
     const text = String(value ?? "").trim();
     if (!text || !canonical) return true; // 空值不拦截
     const canon = canonical.toLowerCase();
+    const isDateField = canon.includes("date") || canon.includes("graduation") || canon.includes("validity");
     // 手机号只能填入电话相关字段
     if (PHONE_RE.test(text)) {
       const isPhoneField = canon.includes("phone") || canon.includes("telephone")
@@ -1467,8 +1514,20 @@
     // 身份证号只能填入证件号字段
     if (ID_RE.test(text)) {
       const isIdField = canon.includes("id_number") || canon.includes("idnumber")
-        || canon.includes("idnumber") || canon.includes("certificate_number");
+        || canon.includes("certificate_number");
       if (!isIdField) return false;
+    }
+    // 纯日期值只能填入日期类字段（避免把"2024-06"填进公司/职位等文本字段）
+    if (DATE_VALUE_RE.test(text) && !isDateField) {
+      return false;
+    }
+    // 学历枚举只能填入学历/学位相关字段
+    if (DEGREE_VALUES.some((degree) => text === degree) && !/degree|education/.test(canon)) {
+      return false;
+    }
+    // 姓名字段不填明显是机构/公司名的值
+    if (canon.includes("full_name") && COMPANY_SUFFIX_RE.test(text)) {
+      return false;
     }
     return true;
   }

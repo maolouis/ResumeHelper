@@ -37,6 +37,20 @@ const elements = {
 let appState = null;
 const saveTimers = new WeakMap();
 
+// 本地余弦相似度：tern_engine.js 只导出 embed（不导出 cosineSim/similar），
+// 这里自己实现，避免 ES module 因命名导出不存在而在加载时抛错。
+function cosineSimilarity(a, b) {
+  if (!a || !b || a.length !== b.length) return 0;
+  let dot = 0, normA = 0, normB = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    dot += a[i] * b[i];
+    normA += a[i] * a[i];
+    normB += b[i] * b[i];
+  }
+  if (!normA || !normB) return 0;
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
 // 云端AI服务商配置
 const PROVIDERS = {
   deepseek: {
@@ -137,10 +151,10 @@ async function callCloudAI(fields, apiKey, endpoint, model) {
 - basic.id_number: 身份证号
 - basic.id_type: 证件类型
 - basic.nationality_country: 国籍
-- basic.ethnicity: 民族
+- basic.nationality: 民族
 - basic.political_status: 政治面貌
-- basic.birthday: 出生日期
-- basic.address: 现居地
+- basic.birth_date: 出生日期
+- basic.current_city: 现居城市
 - education[].school: 学校名称
 - education[].degree: 学历
 - education[].major: 专业
@@ -213,8 +227,11 @@ async function callCloudAI(fields, apiKey, endpoint, model) {
 
 // 本地语义匹配（Ternlight真语义 + 规则兜底）
 function localSemanticMatch(fields) {
-  // 标准字段定义
-  const CANONICAL_FIELDS = [
+  // 标准字段定义：优先复用 field_schema.js 单一事实源（与 content.js 对齐）；
+  // 未注入时退回下方兜底列表。
+  const _schemaFields = (globalThis.__RESUME_FIELD_SCHEMA?.fields || [])
+    .map(({ key, name, aliases }) => ({ key, name, aliases }));
+  const CANONICAL_FIELDS = _schemaFields.length ? _schemaFields : [
     { key: "basic.full_name", name: "姓名", aliases: ["名字", "真实姓名", "应聘者姓名", "求职者姓名"] },
     { key: "basic.gender", name: "性别", aliases: ["男/女"] },
     { key: "basic.phone", name: "手机号码", aliases: ["手机号", "联系电话", "联系方式", "手机"] },
@@ -222,14 +239,15 @@ function localSemanticMatch(fields) {
     { key: "basic.id_number", name: "身份证号", aliases: ["身份证号码", "证件号码", "居民身份证"] },
     { key: "basic.id_type", name: "证件类型", aliases: ["证件种类"] },
     { key: "basic.nationality_country", name: "国籍", aliases: ["国家"] },
-    { key: "basic.ethnicity", name: "民族", aliases: ["族群"] },
+    { key: "basic.nationality", name: "民族", aliases: ["族群"] },
     { key: "basic.political_status", name: "政治面貌", aliases: ["政治情况"] },
-    { key: "basic.birthday", name: "出生日期", aliases: ["生日", "出生年月"] },
+    { key: "basic.birth_date", name: "出生日期", aliases: ["生日", "出生年月"] },
     { key: "basic.native_place", name: "家乡", aliases: ["籍贯", "生源地", "原生地"] },
-    { key: "basic.address", name: "现居地", aliases: ["居住地", "所在地", "现住址"] },
+    { key: "basic.current_city", name: "现居城市", aliases: ["现居地", "居住地", "所在地"] },
+    { key: "basic.address", name: "联系地址", aliases: ["现住址", "通讯地址"] },
     { key: "basic.age", name: "年龄", aliases: ["岁数"] },
     { key: "basic.preferred_city", name: "期望工作地点", aliases: ["期望城市", "意向城市", "期望地点"] },
-    { key: "basic.available_duration", name: "可实习时长", aliases: ["实习时长", "可到岗时间", "到岗时间"] },
+    { key: "basic.available_date", name: "可到岗日期", aliases: ["到岗时间", "最快到岗时间"] },
     
     { key: "education[].school", name: "学校名称", aliases: ["院校", "毕业院校", "毕业学校", "学校"] },
     { key: "education[].degree", name: "学历", aliases: ["学位", "最高学历", "学历层次"] },
@@ -242,7 +260,7 @@ function localSemanticMatch(fields) {
     
     { key: "work_experience[].company", name: "公司名称", aliases: ["企业名称", "单位名称", "公司", "企业", "单位"] },
     { key: "work_experience[].position", name: "职位", aliases: ["岗位", "职务", "职位名称"] },
-    { key: "work_experience].department", name: "部门", aliases: ["部门名称"] },
+    { key: "work_experience[].department", name: "部门", aliases: ["部门名称"] },
     { key: "work_experience[].start_date", name: "入职时间", aliases: ["开始时间", "入职年月"] },
     { key: "work_experience[].end_date", name: "离职时间", aliases: ["结束时间", "离职年月"] },
     { key: "work_experience[].description", name: "工作描述", aliases: ["工作内容", "工作职责", "工作业绩"] },
@@ -267,11 +285,11 @@ function localSemanticMatch(fields) {
     { key: "professional_skills[].level", name: "技能水平", aliases: ["熟练程度", "水平", "掌握程度"] },
     
     { key: "campus_experience[].organization", name: "组织名称", aliases: ["社团名称", "学生会名称"] },
-    { key: "campus_experience[].position", name: "担任职务", aliases: ["职务", "职位"] },
+    { key: "campus_experience[].role", name: "职务", aliases: ["担任职务", "职位"] },
     { key: "campus_experience[].description", name: "活动描述", aliases: ["活动内容", "工作职责"] },
     
     { key: "publications[].title", name: "论文标题", aliases: ["论文名称", "著作名称"] },
-    { key: "publications[].journal", name: "发表期刊", aliases: ["期刊名称", "发表刊物"] },
+    { key: "publications[].publication", name: "期刊/会议", aliases: ["期刊名称", "会议名称", "发表刊物"] },
     
     { key: "patents[].name", name: "专利名称", aliases: ["专利名称"] },
     { key: "patents[].number", name: "专利号", aliases: ["专利编号"] },
@@ -320,12 +338,12 @@ function localSemanticMatch(fields) {
         for (const fieldDef of CANONICAL_FIELDS) {
           // 计算与标准字段名的相似度
           const canonicalEmbedding = window.Ternlight.embed(fieldDef.name);
-          let sim = window.Ternlight.cosineSim(queryEmbedding, canonicalEmbedding);
-          
+          let sim = cosineSimilarity(queryEmbedding, canonicalEmbedding);
+
           // 加上别名的相似度（取最大值）
           for (const alias of fieldDef.aliases) {
             const aliasEmbedding = window.Ternlight.embed(alias);
-            const aliasSim = window.Ternlight.cosineSim(queryEmbedding, aliasEmbedding);
+            const aliasSim = cosineSimilarity(queryEmbedding, aliasEmbedding);
             if (aliasSim > sim) sim = aliasSim;
           }
           

@@ -1,0 +1,53 @@
+{
+  "description": "离线字段匹配评测夹具。expected 为期望的 canonical key（\"\" 表示应跳过不填）。context 为 CONTEXT_PATTERNS 中的区块名（见 content.js）。",
+  "cases": [
+    { "id": "name_exact", "category": "basic", "label": "姓名", "context": "", "expected": "basic.full_name" },
+    { "id": "phone_exact", "category": "basic", "label": "手机号码", "context": "", "expected": "basic.phone" },
+    { "id": "email_exact", "category": "basic", "label": "电子邮箱", "context": "", "expected": "basic.email" },
+    { "id": "email_semantic", "category": "basic", "label": "电子邮件地址", "context": "", "expected": "basic.email" },
+    { "id": "gender", "category": "basic", "label": "性别", "context": "", "expected": "basic.gender" },
+    { "id": "birth_date", "category": "basic", "label": "出生日期", "context": "", "expected": "basic.birth_date" },
+    { "id": "age_derived", "category": "basic", "label": "年龄", "context": "", "expected": "basic.age" },
+    { "id": "ethnicity", "category": "basic", "label": "民族", "context": "", "expected": "basic.nationality" },
+    { "id": "nationality", "category": "basic", "label": "国籍", "context": "", "expected": "basic.nationality_country" },
+    { "id": "country", "category": "basic", "label": "国家", "context": "", "expected": "basic.nationality_country" },
+    { "id": "native_place", "category": "basic", "label": "籍贯", "context": "", "expected": "basic.native_place" },
+    { "id": "current_city", "category": "basic", "label": "现居地", "context": "", "expected": "basic.current_city" },
+    { "id": "address", "category": "basic", "label": "联系地址", "context": "", "expected": "basic.address" },
+    { "id": "preferred_city", "category": "basic", "label": "期望工作地点", "context": "", "expected": "basic.preferred_city" },
+    { "id": "id_number", "category": "basic", "label": "身份证号", "context": "", "expected": "basic.id_number" },
+    { "id": "political_status", "category": "basic", "label": "政治面貌", "context": "", "expected": "basic.political_status" },
+
+    { "id": "edu_school", "category": "education", "label": "毕业院校", "context": "education", "expected": "education[].school" },
+    { "id": "edu_degree", "category": "education", "label": "最高学历", "context": "education", "expected": "education[].degree" },
+    { "id": "edu_major", "category": "education", "label": "所学专业", "context": "education", "expected": "education[].major" },
+    { "id": "edu_start", "category": "education", "label": "开始时间", "context": "education", "expected": "education[].start_date" },
+    { "id": "edu_end", "category": "education", "label": "毕业时间", "context": "education", "expected": "education[].end_date" },
+
+    { "id": "work_company", "category": "work_experience", "label": "公司名称", "context": "work_experience", "expected": "work_experience[].company" },
+    { "id": "work_position", "category": "work_experience", "label": "职位名称", "context": "work_experience", "expected": "work_experience[].position" },
+    { "id": "work_city", "category": "work_experience", "label": "工作地点", "context": "work_experience", "expected": "work_experience[].city" },
+    { "id": "work_industry", "category": "work_experience", "label": "所属行业", "context": "work_experience", "expected": "work_experience[].industry" },
+
+    { "id": "proj_name", "category": "projects", "label": "项目名称", "context": "projects", "expected": "projects[].name" },
+    { "id": "proj_start", "category": "projects", "label": "开始时间", "context": "projects", "expected": "projects[].start_date" },
+
+    { "id": "job_city", "category": "job_intentions", "label": "工作地点", "context": "job_intentions", "expected": "basic.preferred_city" },
+    { "id": "job_industry", "category": "job_intentions", "label": "期望行业", "context": "job_intentions", "expected": "job_intentions[].industry" },
+    { "id": "job_employment_type", "category": "job_intentions", "label": "职位类型", "context": "job_intentions", "expected": "job_intentions[].employment_type" },
+
+    { "id": "campus_start", "category": "campus_experience", "label": "开始时间", "context": "campus_experience", "expected": "campus_experience[].start_date" },
+    { "id": "lang_language", "category": "language_skills", "label": "语种", "context": "language_skills", "expected": "language_skills[].language" },
+    { "id": "lang_level", "category": "language_skills", "label": "掌握程度", "context": "language_skills", "expected": "language_skills[].level" },
+    { "id": "skill_level", "category": "professional_skills", "label": "熟练程度", "context": "professional_skills", "expected": "professional_skills[].level" },
+
+    { "id": "ec_name_bare", "category": "contacts", "label": "姓名", "context": "emergency_contacts", "expected": "emergency_contacts[].name" },
+    { "id": "ec_phone_bare", "category": "contacts", "label": "联系电话", "context": "emergency_contacts", "expected": "emergency_contacts[].phone" },
+    { "id": "ec_name_full", "category": "contacts", "label": "紧急联系人姓名", "context": "", "expected": "emergency_contacts[].name" },
+    { "id": "family_name", "category": "contacts", "label": "家庭成员姓名", "context": "family_members", "expected": "family_members[].name" },
+    { "id": "ref_name", "category": "contacts", "label": "证明人姓名", "context": "references", "expected": "references[].name" },
+
+    { "id": "trunc_email", "category": "skip", "label": "电子邮", "context": "", "expected": "" },
+    { "id": "intern_duration", "category": "skip", "label": "实习时长", "context": "work_experience", "expected": "" }
+  ]
+}

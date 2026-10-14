@@ -65,7 +65,9 @@ DATE_RANGE = re.compile(
 
 
 def _normalize_heading(value: str) -> str:
-    return re.sub(r"[\s：:&＆/|·•（）()_-]", "", value).casefold()
+    normalized = re.sub(r"[\s：:&＆/|·•（）()_-]", "", value).casefold()
+    # 去掉标题前的编号（如「1.教育经历」「一、工作经历」），让 PDF 提取的编号前缀不干扰切分。
+    return re.sub(r"^(?:\d+|[一二三四五六七八九十百]+)[、.．:：]?", "", normalized)
 
 
 def _heading_aliases() -> list[tuple[str, list[str]]]:
@@ -195,13 +197,17 @@ def _parse_education(entry: dict) -> dict:
 
 def _split_work_title(title: str) -> tuple[str, str]:
     company = re.match(
-        r"^(.+?(?:有限责任公司|股份有限公司|有限公司|集团|研究院|研究所|事务所|银行|中心|医院|学校|大学|学院|委员会|政府))(?=\s|$)(.*)$",
+        r"^(.+?(?:有限责任公司|股份有限公司|有限公司|集团|研究院|研究所|设计院|事务所|银行|中心|医院|"
+        r"学校|大学|学院|委员会|政府|科技|信息|软件|网络|通讯|传媒|咨询|金融|保险|证券|基金|投资|"
+        r"贸易|汽车|医药|生物|食品|能源|材料|建筑|地产))(?=\s|$)(.*)$",
         title,
     )
     if company:
         return company[1].strip(), company[2].strip()
     position = re.search(
-        r"\s+([^\s]{1,20}(?:工程师|实习生|经理|专员|顾问|研究员|分析师|助理|主管|总监|教师|开发|设计师|运营))$",
+        r"\s+([^\s]{1,24}(?:工程师|实习生|经理|专员|顾问|研究员|分析师|助理|主管|总监|教师|开发|设计师|运营|"
+        r"架构师|产品经理|项目经理|算法工程师|测试工程师|运维工程师|管培生|合伙人|创始人|"
+        r"董事长|总经理|副总裁|首席|主任|科长|处长|部长|组长|队长))$",
         title,
     )
     if position:
@@ -293,24 +299,53 @@ def _labelled_values(section: str, line: str) -> dict[str, str]:
     return values
 
 
+def _trailing_label(section: str, line: str) -> str | None:
+    """若整行就是一个「标签」或「标签：」（值被 PDF 断到下一行），返回该字段 key，否则 None。"""
+    aliases = _section_field_aliases(section)
+    if not aliases:
+        return None
+    stripped = line.strip()
+    if not stripped or len(stripped) > 24:
+        return None
+    pattern = "|".join(re.escape(alias) for alias in sorted(aliases, key=len, reverse=True))
+    match = re.match(r"^(" + pattern + r")[ \t]*[:：]?[ \t]*$", stripped, re.I)
+    if match:
+        return aliases[match.group(1).casefold()]
+    return None
+
+
 def _parse_labelled_records(section: str, lines: list[str]) -> tuple[list[dict], set[int]]:
     primary = SECTION_DEFINITIONS[section]["fields"][0][0]
     description_key = next((key for key, _label in SECTION_DEFINITIONS[section]["fields"] if key == "description"), "")
     records: list[dict] = []
     used: set[int] = set()
     current: dict = {}
+    pending: str | None = None
     for index, line in enumerate(lines):
         values = _labelled_values(section, line)
-        if not values:
-            if current and description_key and len(line) <= 500:
-                current[description_key] = "\n".join(filter(None, [current.get(description_key, ""), line]))
-                used.add(index)
+        if values:
+            pending = None
+            used.add(index)
+            if current and (primary in values or any(key in current for key in values)):
+                records.append(current)
+                current = {}
+            current.update(values)
             continue
-        used.add(index)
-        if current and (primary in values or any(key in current for key in values)):
-            records.append(current)
-            current = {}
-        current.update(values)
+        # 上一行是「标签：」且本行是它的值（标签在行末、值在下一行）
+        if pending is not None:
+            value = _clean_field_value(pending, line)
+            if value:
+                current[pending] = value
+                used.add(index)
+            pending = None
+            continue
+        pending = _trailing_label(section, line)
+        if pending is not None:
+            used.add(index)
+            continue
+        if current and description_key and len(line) <= 500:
+            current[description_key] = "\n".join(filter(None, [current.get(description_key, ""), line]))
+            used.add(index)
     if current:
         records.append(current)
     return records, used

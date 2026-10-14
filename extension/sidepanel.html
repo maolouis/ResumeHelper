@@ -78,13 +78,14 @@
       <span>不会自动提交、登录或处理验证码</span>
       <button id="refreshButton" class="text-button" type="button">刷新资料</button>
     </footer>
+    <script src="field_schema.js"></script>
     <script src="sidepanel.js"></script>
     <script type="module">
-      // 引入 Ternlight 语义模型
-      import { embed, cosineSim, similar } from './ternlight/tern_engine.js';
-      
+      // 引入 Ternlight 语义模型（tern_engine.js 仅导出 embed；余弦相似度在 sidepanel.js 内实现）
+      import { embed } from './ternlight/tern_engine.js';
+
       // 挂到 window 上供 sidepanel.js 使用
-      window.Ternlight = { embed, cosineSim, similar };
+      window.Ternlight = { embed };
       
       // 预加载模型
       console.log("Ternlight 语义模型加载中...");
